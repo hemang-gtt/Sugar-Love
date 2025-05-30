@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const { redisClient: redis, redisDb } = require('../DB/redis');
+const { rng } = require('../rng');
 const getTodayDateTime = () => {
   const currentDate = new Date();
 
@@ -37,18 +38,15 @@ const isValidUserId = (userId, urlToken) => {
 };
 
 const hasPreviousSession = async (userId, urlToken) => {
-  console.log('userId', userId);
   let existingToken = await redis.get(`${redisDb}-user:${userId}`);
-  console.log(`existing token are ------${existingToken}`);
-
+  console.log('existing otken ----', existingToken);
   if (existingToken && existingToken === urlToken) {
-    console.log('now we are here---------');
     let userExists = await redis.get(`${redisDb}-token:${urlToken}`);
+    console.log('user exist ----', userExists);
     if (!userExists) {
       return false;
     }
   }
-
   return true;
 };
 
@@ -78,6 +76,7 @@ const isValidCurrencyProxy = async (currency) => {
 
 const currencyAPIProxy = async (currency, min, max, step = null, isStepArray = false) => {
   try {
+    //! what is step array ? step = ?
     let finalURL = process.env.CURRENCY_URL + `/get-currency/${currency}/${min}/${max}`;
     if (step != null) finalURL += `/${step}`;
     if (isStepArray) finalURL += `/${isStepArray}`;
@@ -110,6 +109,61 @@ const currencyAPIProxy = async (currency, min, max, step = null, isStepArray = f
   }
 };
 
+const CurrencyAPI = async (currency) => {
+  try {
+    const game = process.env.GAME_NAME;
+    const vendor = process.env.VENDOR_NAME;
+
+    console.log(`game is -----${game}---------vendor is ------${vendor}`);
+
+    let finalURL = process.env.CURRENCY_URL + `/get-currency-range/${currency}/${game}/${vendor}`;
+
+    const headers = { info: process.env.DB_NAME };
+    let resp = await axios.get(finalURL, { headers, timeout: 10000 });
+    return { status: 1, ...resp.data };
+  } catch (error) {
+    let resp = {
+      status: 0,
+      range: [
+        0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.75, 0.85, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 7,
+        8, 9, 10, 12, 15, 18, 20, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 120, 125, 140, 150, 160, 175, 180,
+        200,
+      ],
+      buttons: [0.2, 0.3, 0.5, 1, 5, 10, 50, 200],
+      featureBuyRange: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2],
+      defaultBet: 1,
+    };
+
+    return resp;
+  }
+};
+
+const getRandom = (min, max) => {
+  // get random integer number
+  min = Math.ceil(min); // Inclusive lower bound
+  max = Math.floor(max); // Exclusive upper bound
+  return rng('integer', min, max);
+};
+
+const getRandomNumber = (digit) => {
+  return Math.random().toFixed(digit).split('.')[1];
+};
+
+const verifyCurrentSession = async (token, timestamp) => {
+  let redisTimestamp = await redis.get(`${redisDb}-token:${token}`);
+  if (redisTimestamp && redisTimestamp === timestamp.toString()) {
+    return false;
+  }
+  return true;
+};
+
+const isValidTwoDecimalNumber = (input) => {
+  const regex = /^\d+(\.\d{1,2})?$/;
+  if (typeof input !== 'string' && typeof input !== 'number') {
+    return false;
+  }
+  return regex.test(input.toString());
+};
 module.exports = {
   getTodayDateTime,
   hasDateChanged,
@@ -118,4 +172,9 @@ module.exports = {
   getTokenDetails,
   isValidCurrencyProxy,
   currencyAPIProxy,
+  getRandom,
+  isValidTwoDecimalNumber,
+  getRandomNumber,
+  verifyCurrentSession,
+  CurrencyAPI,
 };

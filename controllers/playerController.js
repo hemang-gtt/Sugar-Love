@@ -7,13 +7,17 @@ const {
   hasPreviousSession,
   isValidCurrencyProxy,
   currencyAPIProxy,
+  CurrencyAPI,
 } = require('../utils/common');
-const { apiLog } = require('../logs');
+const { apiLog, logErrorMessage } = require('../logs');
+const gameutils = require('../gamePlay/gameUtils');
+const { table1 } = require('../weights/tables');
 
 const authorizePlayer = async (userId, urlToken, consumerId) => {
   const playerInstance = await Player(process.env.DbName + `-${consumerId}`);
 
-  const playerData = await playerInstance.findOne({ _id: userId }).lean();
+  let playerData = await playerInstance.findOne({ _id: userId }).lean();
+  console.log('player data is -----', playerData, playerData.balance);
 
   if (playerData?.token != urlToken) {
     return {
@@ -23,6 +27,36 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
     };
   }
 
+  console.log('player balance is ----', playerData.balance);
+  let spinCount = 0; // contain the count of spin available
+  let finalCampaigns = [];
+  const currentTime = new Date();
+
+  console.log('player data campaign is ----', playerData.campaigns);
+
+  // calculating the number of spinCount at a stage
+  for (const campaign of playerData.campaigns) {
+    if (campaign) {
+      const validFrom = new Date(campaign.validFrom);
+      const validBefore = new Date(campaign.validBefore);
+
+      if (campaign.playedSpinCount < campaign.spinCount) {
+        finalCampaigns.push(campaign);
+        if (currentTime >= validFrom && currentTime <= validBefore) {
+          spinCount +=
+            campaign.spinCount - campaign.playedSpinCount > 0 ? campaign.spinCount - campaign.playedSpinCount : 0;
+        }
+      }
+    }
+  }
+  console.log(`--player data campagin ----${playerData.campaigns.length} ----final campaign ${finalCampaigns.length}`);
+  if (playerData.campaigns.length !== finalCampaigns.length) {
+    playerData = await playerInstance
+      .findOneAndUpdate({ _id: userId }, { $set: { campaigns: finalCampaigns } }, { upsert: true, new: true })
+      .lean();
+  }
+
+  // checking is currency valid and not change after game running
   if (process.env.CHECK_VALID_CURRENCY_ON_LOGIN === 'true') {
     const checkValidCurrency = await isValidCurrencyProxy(playerData.currency);
     console.log('check valid currency output is -----', checkValidCurrency);
@@ -32,6 +66,21 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
         message: 'Currency is invalid!',
       };
     }
+    if (
+      playerData.resumedGameCurrency &&
+      playerData.resumedGameCurrency != '' &&
+      playerData.resumedGameCurrency != playerData.currency
+    ) {
+      if (spinCount > 0 || playerData.freeSpin.count > 0 || playerData.upgradeSpin.activeCount > 0) {
+        return {
+          status: 'ERROR',
+          message:
+            'Currency has been changed in a running game! please change your currency to ' +
+            playerData.resumedGameCurrency +
+            ' to resume the game.',
+        };
+      }
+    }
   }
 
   const getCurrencyData = await currencyAPIProxy(
@@ -40,12 +89,44 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
     Number(process.env.MAX_STAKE),
     Number(process.env.STEP)
   );
+  const getFeatureBuyData = await currencyAPIProxy(
+    playerData.currencyCode,
+    Number(process.env.FEATURE_BUY_MIN),
+    Number(process.env.FEATURE_BUY_MAX),
+    Number(process.env.FEATURE_BUY_STEP),
+    true
+  );
 
+  console.log('get featurebuy data is --------', getFeatureBuyData);
   console.log('currency data api response is ----', getCurrencyData);
   let timestamp = Math.floor(new Date().getTime() / 1000);
   let username = playerData.consumerId;
   let lastBet = playerData.lastBet;
   let lastWin = playerData.lastWin;
+
+  if (
+    (playerData?.freeSpin?.isActive && playerData?.upgradeSpin?.count < playerData.upgradeSpin?.required) ||
+    (!playerData?.freeSpin?.isActive && playerData?.upgradeSpin?.activeCount == 0)
+  ) {
+    console.log(' i am cming here in free spin section -----');
+    let newUpgradeSpin = {
+      required:
+        process.env.DUMMY_DATA_TESTING === 'true'
+          ? Number(process.env.DUMMY_UPGRADE_SPIN_COUNT)
+          : gameutils.getKeyBasedOnWeights(table1, 'wins'), // tumble count reduces the upgrade spin count
+      count: 0,
+      activeCount: 0,
+      betAmount: -1,
+      totalWin: 0,
+    };
+    console.log('new upgraded spin is -----', newUpgradeSpin);
+    playerData = await playerInstance
+      .findOneAndUpdate({ _id: userId }, { $set: { upgradeSpin: newUpgradeSpin } }, { upsert: true, new: true })
+      .lean();
+  }
+
+  console.log('player data line 127 is -----', playerData);
+  console.log('balance is -----', playerData.balance);
 
   let response = {
     status: 'SUCCESS',
@@ -61,9 +142,36 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
     maxStake: getCurrencyData.max,
     defaultStake: getCurrencyData.base,
     step: getCurrencyData.step,
+    fbArr: getFeatureBuyData.arr,
   };
 
-  console.log('response is ----', response);
+  console.log('response in line 141 is ----', response);
+
+  if (playerData?.freeSpin?.count > 0) {
+    response.freeSpin = playerData.freeSpin;
+  } else if (playerData.upgradeSpin?.activeCount > 0) {
+    response.upgradeSpins = {
+      left: playerData.upgradeSpin.activeCount,
+      betAmount: playerData.upgradeSpin.betAmount,
+      totalWin: playerData.upgradeSpin.totalWin,
+    };
+  } else if (spinCount > 0) {
+    if (playerData.lastBet) {
+      response.lastBet = playerData.lastBet;
+      response.lastWin = playerData.lastWin;
+    }
+    response.campaign = {
+      left: finalCampaigns[0].spinCount - finalCampaigns[0].playedSpinCount,
+      betAmount: finalCampaigns[0].totalBetAmount,
+      vaildBefore: new Date(finalCampaigns[0].validBefore).getTime() / 1000,
+    };
+  } else if (playerData.lastBet) {
+    response.lastBet = playerData.lastBet;
+    response.lastWin = playerData.lastWin;
+  }
+
+  console.log('response generated after authorization -----', response);
+
   return response;
 };
 
@@ -90,7 +198,10 @@ const loginHandler = async (req, res, next) => {
     }
 
     const previousSessionCheck = await hasPreviousSession(userId, urlToken);
-    if (previousSessionCheck) {
+
+    console.log(previousSessionCheck);
+    // ! For testing just commenting it out
+    if (false && previousSessionCheck) {
       return res.status(401).json({
         status: 'UNAUTHORIZED',
         message: 'Previous session is opened. Please close the previous game or start the game from the lobby...',
@@ -115,8 +226,138 @@ const loginHandler = async (req, res, next) => {
     return res.status(401).json(result);
   } catch (error) {
     console.log(error);
+    logErrorMessage(error);
     throw error;
   }
 };
 
-module.exports = { loginHandler };
+const verifyPlayer = async (userId, betAmount, isFeatureBuy, consumerId) => {
+  const playerInstance = await Player(process.env.DbName + `-${consumerId}`);
+
+  console.log('user id is ---', userId);
+  let playerData = await playerInstance.findOne({ _id: userId }).lean();
+  if (!playerData) {
+    return {
+      status: 'Error',
+      message: 'Something went wrong !!',
+    };
+  }
+
+  // player is banned !!!
+
+  if (playerData.isBanned) {
+    return { status: 'ERROR', message: 'Banned player !!!' };
+  }
+
+  // Today's limit reached !!!
+  let maxGamesAllowedInASingleDay = await redis.hget(`${redisDb}:admin`, 'maxGamesAllowedInASingleDay');
+
+  console.log(`maxGamesAllowedInASingleDay----${maxGamesAllowedInASingleDay}`);
+  if (maxGamesAllowedInASingleDay && playerData.todayGameCount >= Number(maxGamesAllowedInASingleDay)) {
+    return { status: 'ERROR', message: `Today's limit reached !!` };
+  } else if (playerData.todayGameCount >= Number(process.env.SINGLE_DAY_MAX_GAMES_ALLOWED)) {
+    return { status: 'ERROR', message: `Today's limit reached !!` };
+  }
+
+  // Balance is insufficient
+  // 2 cases here ->
+  // 1> Normal Bet -> Is player balance > betAmount
+  // 2> Feature Buy -> if this is true then it have multiplier like bet placed of amount 2 rs but multiplier have the value
+  // of 100 rs then we will check is user balance > 2*100
+  if (
+    playerData.balance < betAmount ||
+    (isFeatureBuy && playerData.balance < betAmount * Number(process.env.FEATURE_BUY_MULTIPLIER))
+  ) {
+    return { status: 'ERROR', message: 'Insufficient balance!' };
+  }
+
+  // now check are there any spins available
+
+  // 1> free spin , 2> upgrade spin , 3> campaign free spin
+  const freeSpin = {
+    isActive: false,
+    count: 0,
+    spotMultiplier: '',
+    isFeatureBuyFs: false,
+    totalWin: 0,
+    betAmount: 0,
+  };
+
+  const campaignFreeSpin = { count: 0, betAmount: 0, vaildBefore: 0 };
+  const upgradeSpin = { count: 0, betAmount: 0 };
+
+  let finalCampaigns = [];
+  let spinCount = 0; // will have the final spin count
+  const currentTime = new Date();
+  for (const campaign of playerData.campaigns) {
+    // now we will validate each campaign
+    const validFrom = new Date(campaign.validFrom);
+    const validBefore = new Date(campaign.validBefore);
+
+    if (currentTime >= validFrom && currentTime <= validBefore) {
+      finalCampaigns.push(campaign);
+      spinCount +=
+        campaign.spinCount - campaign.playedSpinCount > 0 ? campaign.spinCount - campaign.playedSpinCount : 0;
+    }
+  }
+
+  // if bet amount is zero then we check the free spins
+  if (betAmount === 0) {
+    // Check for active campaign
+    if (spinCount > 0) {
+      // are there any existing free spin from campaign
+      campaignFreeSpin.count = spinCount;
+      campaignFreeSpin.betAmount = finalCampaigns[0].totalBetAmount;
+      // !need to check what are we doing here
+      campaignFreeSpin.vaildBefore = new Date(finalCampaigns[0].validBefore).getTime() / 1000;
+    }
+
+    // Checking that are there any free spin available or not
+    if (playerData.freeSpin.count > 0) {
+      freeSpin.isActive = true;
+      freeSpin.count = playerData.freeSpin.count;
+      freeSpin.spotMultiplier = playerData.freeSpin.spotMultiplier;
+      freeSpin.isFeatureBuyFs = playerData.freeSpin.isFeatureBuyFs;
+      freeSpin.totalWin = playerData.freeSpin.totalWin;
+      freeSpin.betAmount = playerData.freeSpin.betAmount;
+    }
+    // check for upgrade spin
+    if (playerData.upgradeSpin.activeCount > 0) {
+      upgradeSpin.count = playerData.upgradeSpin.activeCount;
+      upgradeSpin.betAmount = playerData.upgradeSpin.betAmount;
+    }
+
+    //! if No free spin available and the betAmount is zero so we will return the error;
+
+    if (playerData.freeSpin.count <= 0 && spinCount <= 0 && playerData.upgradeSpin.activeCount <= 0) {
+      return { status: 'ERROR', message: 'No Free Spin Found!' };
+    }
+  }
+
+  // if there are any type of spin availabe and bet amount > 0 - throw error
+  else if (playerData.freeSpin.isActive || spinCount > 0 || playerData.upgradeSpin.activeCount > 0) {
+    return { status: 'ERROR', message: 'Session is invalid!' };
+  }
+  const getCurrencyData = await CurrencyAPI(playerData.currency);
+  if (isFeatureBuy) {
+    if (!getCurrencyData.featureBuyRange.includes(betAmount)) {
+      return { status: 'ERROR', message: `Bet Amount is invalid!` };
+    }
+  } else {
+    if (betAmount > 0 && freeSpin.count == 0) {
+      if (!getCurrencyData.range.includes(betAmount)) {
+        return { status: 'ERROR', message: `Bet Amount is invalid!` };
+      }
+    }
+  }
+  return {
+    status: 'SUCCESS',
+    data: playerData,
+    message: 'user is verified',
+    freeSpin,
+    campaignFreeSpin,
+    upgradeSpin,
+  };
+};
+
+module.exports = { loginHandler, verifyPlayer };

@@ -4,6 +4,8 @@ const { dbLog } = require('../logs');
 const jwt = require('jsonwebtoken');
 
 const { hasDateChanged } = require('../utils/common');
+const gameUtils = require('../gamePlay/gameUtils');
+const { table1 } = require('../weights/tables');
 
 const gameLaunch = async (payload, playerInfo) => {
   console.log('payload is ---------', payload);
@@ -51,7 +53,29 @@ const registerPlayer = async (payload, playerInfo, playerInstance) => {
     isBanned: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    upgradeSpin: {
+      required:
+        process.env.DUMMY_DATA_TESTING === 'true'
+          ? Number(process.env.DUMMY_UPGRADE_SPIN_COUNT)
+          : gameUtils.getKeyBasedOnWeights(table1, 'wins'),
+
+      count: 0,
+      activeCount: 0,
+      betAmount: -1,
+      totalWin: 0,
+    },
+    freeSpin: {
+      isActive: false,
+      isFeatureBuyFs: false,
+      count: 0,
+      betAmount: 0,
+      spotMultiplier: '',
+      totalWin: 0,
+    },
   };
+  console.log('player data is -----', playerData);
+
+  dbLog(`Set, req: REGISTER, data:${JSON.stringify(playerData)}`);
 
   console.log('player data is ----', playerData);
   const newPlayer = new playerInstance(playerData);
@@ -98,6 +122,28 @@ const updatePlayer = async (payload, playerInfo, playerInstance, existingPlayer)
 
   console.log('is date changed -----', isDateChanged);
 
+  // get the active campaign
+  let spinCount = 0;
+  let activeCampaigns = [];
+  const currentTime = new Date();
+
+  for (const campaign of existingPlayer.campaigns) {
+    if (campaign) {
+      const validFrom = new Date(campaign.validFrom);
+      console.log('valid from-----', validFrom);
+
+      const validBefore = new Date(campaign.validBefore);
+      if (campaign.playedSpinCount < campaign.spinCount && currentTime <= validBefore) {
+        activeCampaigns.push(campaign);
+      }
+
+      if (currentTime >= validFrom && currentTime <= validBefore) {
+        spinCount +=
+          campaign.spinCount - campaign.playedSpinCount > 0 ? campaign.spinCount - campaign.playedSpinCount : 0;
+      }
+    }
+  }
+
   let playerData = {
     productId: payload.productId,
     lang: payload.lang,
@@ -117,7 +163,21 @@ const updatePlayer = async (payload, playerInfo, playerInstance, existingPlayer)
     isBanned: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    campaigns: activeCampaigns,
   };
+
+  if (
+    (spinCount > 0 || existingPlayer.freeSpin.count > 0 || existingPlayer.upgradeSpin.activeCount > 0) &&
+    existingPlayer.resumedGameCurrency === ''
+  ) {
+    if (existingPlayer.currency !== playerData.currency) {
+      playerData.resumedGameCurrency = existingPlayer.currency;
+    } else if (existingPlayer.resumedGameCurrency === playerData.currency) {
+      playerData.resumedGameCurrency = '';
+    }
+  }
+
+  dbLog(`SET, req: LOGIN, playerId: ${existingPlayer._id}, data: ${JSON.stringify(playerData)}`);
 
   console.log('player data is ----', playerData);
 
@@ -125,7 +185,6 @@ const updatePlayer = async (payload, playerInfo, playerInstance, existingPlayer)
     .findOneAndUpdate({ _id: existingPlayer._id }, { $set: playerData }, { new: true })
     .lean();
 
-  console.log('updated player -----', updatedPlayer);
   dbLog(`SET, req: LOGIN, playerId: ${existingPlayer._id}, data: ${JSON.stringify(playerData)}`);
 
   let response = {

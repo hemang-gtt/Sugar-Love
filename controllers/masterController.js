@@ -15,8 +15,6 @@ const saveToMaster = async (playerId, requestType, req, res, user, providerName)
 
   dbLog(`GET, req: GAME_LAUNCH, data: ${JSON.stringify(masterData)}`);
 
-  console.log('data saved in master collection is -------', masterData);
-
   await master.save();
 };
 

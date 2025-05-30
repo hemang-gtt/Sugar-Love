@@ -16,8 +16,10 @@ const postReq = async (
     'Content-Type': 'application/json',
     'X-Hub-Consumer': player.consumerId,
   };
-
   let url = process.env.API_BASE_URL + requestType;
+  console.log('url is ----', url);
+
+  console.log('data is ----', data);
   try {
     let response = await axios.post(url, data, { headers, timeout });
     return response.data;
@@ -38,8 +40,6 @@ const postReq = async (
 
       throw finalError;
     }
-
-    console.log(error);
     throw error;
   }
 };

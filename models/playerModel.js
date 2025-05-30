@@ -103,6 +103,27 @@ const playerSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    isBanned: {
+      type: Boolean,
+      default: false,
+    },
+    upgradeSpin: {
+      type: Object,
+    },
+    freeSpin: {
+      type: Object,
+    },
+    campaigns: {
+      type: Array,
+      default: [],
+    },
+    resumedGameCurrency: {
+      type: String,
+      default: '',
+    },
+    freeSpinRoundId: {
+      type: String,
+    },
   },
   { timestamps: true }
 );

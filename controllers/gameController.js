@@ -2,6 +2,8 @@ const { gameLaunchValidationSchema } = require('../validator/gameLaunchValidator
 const { playerInfoFinder } = require('../controllers/apiController');
 const { gameLaunch } = require('../services/playerService');
 
+const gameModel = require('../models/gameModel');
+
 const { redisClient: redis, redisDb } = require('../DB/redis');
 const { logErrorMessage, apiLog } = require('../logs');
 
@@ -62,4 +64,53 @@ const gameLauncher = async (req, res, next) => {
   }
 };
 
-module.exports = { gameLauncher };
+const saveGamePlay = async (userId, betAmount, slotResult, user, isFeatureBuy, maxWinningExceeded) => {
+  /* 
+  {
+  totalWin: 0.7,
+  scatters: [ 27 ],
+  freeSpins: 0,
+  response: { g: [ [Object], [Object], [Object], [Object] ] },
+  maxWinningExceeded: false
+  }
+  */
+
+  console.log(`slot result is --during saving the game --`, slotResult); // i think it will have the value in case of feature buy
+  if (userId && user.currency) {
+    const gameInstace = await gameModel(process.env.DbName + `-${user?.consumerId}`);
+
+    let gamePlayData = {
+      userId,
+      totalBet: betAmount,
+      totalWin: Number(parseFloat(slotResult.totalWin).toFixed(2)),
+      createdDate: new Date(),
+      isPlay: true,
+      isWin: slotResult?.totalWin > 0 ? true : false, // ! Not need further
+      isFreeSpin: slotResult?.freeSpins > 0 ? true : false,
+      randSlotNumber: slotResult?.slotNumber, // ! Not need further
+      currency: user.currency,
+      freeSpinCount: slotResult?.freeSpins,
+      freeSpinRoundId: Number(betAmount) === 0 ? user.freeSpinRoundId : '',
+      isFeatureBuy: isFeatureBuy,
+      maxWinningExceeded,
+    };
+    console.log('gamePlaye data is ----', gamePlayData);
+    const gamePlay = new gameInstace(gamePlayData);
+    let savedGame = await gamePlay.save();
+    console.log('saved game is ----', savedGame);
+
+    return {
+      status: 'SUCCESS',
+      data: savedGame,
+      message: 'game mode is saved',
+    };
+  } else {
+    return {
+      status: 'PLEASE_ENTER_ALL_FIELDS',
+      data: {},
+      message: 'please enter all fields',
+    };
+  }
+};
+
+module.exports = { gameLauncher, saveGamePlay };
