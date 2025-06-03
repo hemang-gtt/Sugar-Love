@@ -6,11 +6,11 @@ const jwt = require('jsonwebtoken');
 const { hasDateChanged } = require('../utils/common');
 const gameUtils = require('../gamePlay/gameUtils');
 const { table1 } = require('../weights/tables');
+const logger = require('../utils/logger');
 
 const gameLaunch = async (payload, playerInfo) => {
-  console.log('payload is ---------', payload);
-  console.log('player infor is -----', playerInfo);
-  console.log('hello from game launch');
+  logger.info(`INSIDE GAME LAUNCH::::::::::::::::::::::`);
+  logger.info(`payload came is ----------${JSON.stringify(payload)}`);
 
   const playerInstance = await Player(process.env.DbName + `-${payload?.consumerId}`);
 
@@ -22,13 +22,13 @@ const gameLaunch = async (payload, playerInfo) => {
 
   dbLog(`GET, req: GAME_LAUNCH, data: ${JSON.stringify(player)}`);
 
-  console.log('player present in model is ---------', player);
+  logger.info(`player is ---------${JSON.stringify(player)}`);
 
   if (!player) {
-    console.log('registering the player------');
+    logger.info(`Registering the player ---------------------`);
     return await registerPlayer(payload, playerInfo, playerInstance);
   } else {
-    console.log('player is already register going to update it ---');
+    logger.info(`Player already exists , going to update it -----------`);
     return await updatePlayer(payload, playerInfo, playerInstance, player);
   }
 };
@@ -73,17 +73,11 @@ const registerPlayer = async (payload, playerInfo, playerInstance) => {
       totalWin: 0,
     },
   };
-  console.log('player data is -----', playerData);
 
+  logger.info(`player data --------${JSON.stringify(playerData)}`);
   dbLog(`Set, req: REGISTER, data:${JSON.stringify(playerData)}`);
-
-  console.log('player data is ----', playerData);
   const newPlayer = new playerInstance(playerData);
   let savedPlayer = await newPlayer.save();
-  console.log('player saved -------', savedPlayer);
-
-  // now create the token and return it
-  console.log('jwt secret key ------', process.env.JWT_SECRET_KEY);
   const token = jwt.sign(
     {
       userId: savedPlayer._id,
@@ -92,19 +86,13 @@ const registerPlayer = async (payload, playerInfo, playerInstance) => {
     process.env.JWT_SECRET_KEY
   );
 
-  console.log('generated token is-----', token);
-
   await playerInstance.findOneAndUpdate({ _id: savedPlayer._id }, { $set: { token: token } }, { new: true }).lean();
 
   dbLog(`SET, req: REGISTER, data: ${JSON.stringify(playerData)}`);
 
-  console.log('game base url is-------', process.env.GAME_BASE_URL);
   let response = {
     url: `${process.env.GAME_BASE_URL}?userId=${savedPlayer._id}&token=${token}&locale=${playerData.lang}&api=true&base=${process.env.BASE}&type=${process.env.TYPE}&path=${process.env.BASE_PATH}/`,
   };
-
-  console.log('response is ---------', response);
-
   // save this data to master controller
   await masterController.saveToMaster(savedPlayer._id, 'REGISTER', payload, response);
 
@@ -112,15 +100,9 @@ const registerPlayer = async (payload, playerInfo, playerInstance) => {
 };
 const updatePlayer = async (payload, playerInfo, playerInstance, existingPlayer) => {
   const token = jwt.sign({ userId: existingPlayer._id, providerName: payload?.consumerId }, process.env.JWT_SECRET_KEY);
-
-  console.log('token is ------', token);
   let currentDateAndTime = Math.floor(new Date().getTime() / 1000);
 
-  console.log('current date and time is ----', currentDateAndTime);
-
   let isDateChanged = hasDateChanged(currentDateAndTime, existingPlayer.updatedAt);
-
-  console.log('is date changed -----', isDateChanged);
 
   // get the active campaign
   let spinCount = 0;
@@ -130,7 +112,6 @@ const updatePlayer = async (payload, playerInfo, playerInstance, existingPlayer)
   for (const campaign of existingPlayer.campaigns) {
     if (campaign) {
       const validFrom = new Date(campaign.validFrom);
-      console.log('valid from-----', validFrom);
 
       const validBefore = new Date(campaign.validBefore);
       if (campaign.playedSpinCount < campaign.spinCount && currentTime <= validBefore) {
@@ -178,8 +159,7 @@ const updatePlayer = async (payload, playerInfo, playerInstance, existingPlayer)
   }
 
   dbLog(`SET, req: LOGIN, playerId: ${existingPlayer._id}, data: ${JSON.stringify(playerData)}`);
-
-  console.log('player data is ----', playerData);
+  logger.info(`player data is -----------${JSON.stringify(playerData)}`);
 
   const updatedPlayer = await playerInstance
     .findOneAndUpdate({ _id: existingPlayer._id }, { $set: playerData }, { new: true })
@@ -190,9 +170,6 @@ const updatePlayer = async (payload, playerInfo, playerInstance, existingPlayer)
   let response = {
     url: `${process.env.GAME_BASE_URL}?userId=${updatedPlayer._id}&token=${token}&locale=${playerData.lang}&api=true&base=${process.env.BASE}&type=${process.env.TYPE}&path=${process.env.BASE_PATH}/`,
   };
-
-  console.log('response is -----', response);
-
   await masterController.saveToMaster(updatedPlayer._id, 'LOGIN', payload, response, existingPlayer);
   return response;
 };

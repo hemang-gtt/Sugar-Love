@@ -13,9 +13,7 @@ const saveWalletTransaction = async (
   freeSpin
 ) => {
   try {
-    console.log('inside the transaction controller --TRANSACTION-----', roundId);
-    console.log('slot result output is ', slotResult);
-    console.log('amount', amount);
+    console.log('transaction type is ------------', transactionType);
 
     if (id && typeof amount === 'number' && transactionType && operation && status && transactionId) {
       if (!user) {
@@ -107,7 +105,6 @@ const saveWalletTransaction = async (
         const savePlayer = await playerInstance
           .findOneAndUpdate({ _id: user._id }, { $set: userUpdate }, { new: true })
           .lean();
-        console.log('saved player data----------------', savePlayer);
 
         const transactionInstance = await Transaction(process.env.DbName + `-${user.consumerId}`);
 

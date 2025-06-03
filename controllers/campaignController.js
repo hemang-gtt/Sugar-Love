@@ -47,7 +47,7 @@ const createMasterCampaign = async (req, res) => {
     }
 
     return res.status(200).json({
-      message: 'hi',
+      campaignId: data.campaignId,
     });
   } catch (error) {
     console.log('error', error);
@@ -81,14 +81,30 @@ const createCampaign = async (req, res) => {
 
     console.log('validation got completed -------', value);
     // const campaignMasterData = await campaignMasterInstance.findOne({ campaignId: '1902391' }).lean();
-    const campaignMasterData = await campaignMasterInstance.findOne({ campaignId: data.campaignId }).lean();
+    const campaignMasterData = await campaignMasterInstance
+      .findOne({ campaignId: data.campaignId, isActive: true, campaignEndDate: { $gt: new Date() } })
+      .lean();
     const existingCampaign = await campaignInstance.findOne({
       campaignId: data.campaignId,
     });
-    const existingPlayer = await playerInstance.find({ playerId: data.playerId }).lean();
+
+    // we need to update the playerCampaign array in case if that campaign is existing in player
+    const existingPlayer = await playerInstance.findOne({ playerId: data.playerId }).lean();
+
+    let campaignExists = false;
+
+    let existingPlayedSpinCount = 0;
+    if (existingPlayer?.campaigns?.length) {
+      existingPlayer.campaigns.forEach((camp) => {
+        if (camp.campaignId === data.campaignId) {
+          existingPlayedSpinCount = camp.playedSpinCount;
+          campaignExists = true;
+        }
+      });
+    }
 
     console.log('campaignMasterData is ---------', campaignMasterData);
-    const betAmountForCurrency = campaignMasterData.betAmounts[data.currency];
+    const betAmountForCurrency = campaignMasterData?.betAmounts[data.currency];
     let campaignData;
     if (!campaignMasterData || betAmountForCurrency === undefined) {
       campaignData = {
@@ -98,9 +114,6 @@ const createCampaign = async (req, res) => {
         currency: data.currency,
         playerId: data.playerId,
       };
-      // push this data to campaign array of player
-
-      // it means that campaign master data is not present or it is present but that currency is not there
     } else {
       // means master campaign exist and there is some bet amount there as well
 
@@ -112,23 +125,39 @@ const createCampaign = async (req, res) => {
         spinCount: campaignMasterData.spins,
         currency: data.currency,
         totalBetAmount: betAmountForCurrency,
-        playedSpinCount: 0,
+        playedSpinCount: campaignExists === true ? existingPlayedSpinCount : 0, // playedSpinCount can not be changed
         status: 'ACTIVE',
         isCancelled: false,
         playerId: data.playerId,
       };
     }
 
-    console.log('campaign data is -----', campaignData);
-    await playerInstance.updateOne(
-      { playerId: data.playerId },
-      {
-        $push: {
-          campaigns: campaignData,
+    let updatedPlayer1;
+    // push the campaign if it doesn't exist in player else update it
+    console.log('campaign data is ---', campaignData);
+    if (campaignExists) {
+      updatedPlayer1 = await playerInstance.updateOne(
+        { playerId: data.playerId, 'campaigns.campaignId': data.campaignId },
+        {
+          $set: {
+            'campaigns.$': campaignData, // update only the matched array element
+          },
         },
-      },
-      { upsert: true, new: true }
-    );
+        {
+          new: true,
+        }
+      );
+    } else {
+      await playerInstance.updateOne(
+        { playerId: data.playerId },
+        {
+          $push: {
+            campaigns: campaignData,
+          },
+        },
+        { upsert: true, new: true }
+      );
+    }
 
     if (existingCampaign) {
       await campaignInstance.findOneAndUpdate(
@@ -147,6 +176,8 @@ const createCampaign = async (req, res) => {
       const savedCampaign = await newCampaign.save();
       console.log('saved campaign is ---------', savedCampaign);
     }
+
+    console.log('existing campaign is ------------', existingCampaign);
     return res.status(200).json({
       bonusId: data.bonusId,
       playerId: data.playerId,
@@ -213,6 +244,9 @@ const cancelCampaign = async (req, res) => {
       }
     );
 
+    console.log('updated campaign is ---------', updatedCampaign);
+
+    // remove it from campaign array of player
     const playerUpdate = await playerInstance.updateOne(
       { playerId: data.playerId },
       {
@@ -221,6 +255,7 @@ const cancelCampaign = async (req, res) => {
         },
       }
     );
+    console.log('player updated after -----', playerUpdate);
 
     return res.status(200).json({
       bonusId: data.bonusId,

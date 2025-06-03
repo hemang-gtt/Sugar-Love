@@ -63,6 +63,10 @@ const campaignMasterSchema = new mongoose.Schema(
         message: 'Each currency code in betAmounts must be a 3-4 uppercase letter string.',
       },
     },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     collection: 'CampaignMaster',

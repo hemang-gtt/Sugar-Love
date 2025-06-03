@@ -10,6 +10,8 @@ const { getRandomNumber, verifyCurrentSession } = require('../utils/common');
 const { saveGamePlay } = require('../controllers/gameController');
 const { saveWalletTransaction } = require('../controllers/transactionController');
 const Player = require('../models/playerModel');
+const Campaign = require('../models/campaignModel');
+const logger = require('../utils/logger');
 
 /*
     upgradeSpin: {
@@ -41,9 +43,8 @@ const gamePlay = async (
   reqBetAmount,
   isUpgradeSpinBuy
 ) => {
+  logger.info(`entered the game play function------------`);
   let balance = Number(user.balance);
-
-  console.log('bet amount is ------line 47 HEMANG====================== ', betAmount);
   const game = playGame(
     balance,
     betAmount,
@@ -54,11 +55,10 @@ const gamePlay = async (
     isUpgradeSpinBuy
   );
 
-  console.log('output after game play --------', game);
+  logger.info(`Output after game play --------${JSON.stringify(game)}`);
   let maxWinningExceeded = game.maxWinningExceeded;
-  console.log('max winning exceeded is ----', maxWinningExceeded);
 
-  console.log('balance before deduction ----------------------', balance);
+  logger.info(`balance before deduction is -----------${balance}`);
   if (isFeatureBuy || isUpgradeSpinBuy) {
     balance = gameutils.decimalMultiplier(
       balance - reqBetAmount * Number(process.env.FEATURE_BUY_MULTIPLIER) + game.totalWin
@@ -67,7 +67,7 @@ const gamePlay = async (
     balance = gameutils.decimalMultiplier(balance - reqBetAmount + game.totalWin);
   }
 
-  console.log('balance after deduction is ---- -----', balance);
+  logger.info(`Balance after deduction is ------${balance}`);
 
   let resType;
 
@@ -86,8 +86,6 @@ const gamePlay = async (
 
   const isLastFreeSpin = freeSpin.count == 1 || maxWinningExceeded ? true : false;
 
-  // ! what are we doing here and why ?
-
   [freeSpin, maxWinningExceeded] = checkFreeSpin(
     game,
     freeSpin,
@@ -98,19 +96,16 @@ const gamePlay = async (
     maxWinningExceeded
   );
 
-  console.log(`free spin is ---${JSON.stringify(freeSpin, null, 4)} ---maxWining Exceeded ----${maxWinningExceeded}`);
+  logger.info(`free spin is ---${JSON.stringify(freeSpin)} ---maxWining Exceeded ----${maxWinningExceeded}--------
+  isLastFreeSpin ouptut is -------${isLastFreeSpin}`);
 
   if (!isFeatureBuy && !isActiveCampaign && (!freeSpin.isActive || isLastFreeSpin)) {
     checkUpgradeSpin(user, res, betAmount, freeSpin, maxWinningExceeded);
   } else if ((!res?.fs?.a || res?.fs?.a == 0) && user.upgradeSpin.activeCount > 0 && !isFeatureBuy) {
     res.us = { a: true, c: user.upgradeSpin.activeCount, tw: 0 };
   }
-  console.log('res is ------', res);
-  console.log('game is ----', game);
 
   let savedGame = await saveGamePlay(userId, reqBetAmount, game, user, isFeatureBuy, maxWinningExceeded);
-
-  console.log('game got saved is ---============-', savedGame);
   let winData = {
     betAmount: isFeatureBuy ? reqBetAmount * Number(process.env.FEATURE_BUY_MULTIPLIER) : reqBetAmount,
     winAmount: savedGame.data.totalWin,
@@ -119,7 +114,7 @@ const gamePlay = async (
     isFeatureBuy: isFeatureBuy,
   };
 
-  console.log('win data pushed in redis -----', winData);
+  logger.info(`Win data entered in redis is -------${JSON.stringify(winData)}`);
 
   // !NEED to check the datatype in redis why are we doing lpush here
   redis.lpush(`${redisDb}:queue`, JSON.stringify(winData));
@@ -128,6 +123,7 @@ const gamePlay = async (
     res.maxWinningExceeded = true;
   }
 
+  logger.info(`Exit the game play function------------`);
   return {
     savedGame,
     res,
@@ -147,13 +143,12 @@ const betAPI = async (
   isUpgradeSpinBuy
 ) => {
   console.log('hi------inside bet API-');
+  logger.info(`Inside the bet Api-function-------------`);
 
   betAmount = isFeatureBuy || isUpgradeSpinBuy ? betAmount * Number(process.env.FEATURE_BUY_MULTIPLIER) : betAmount;
 
   // in case of feature buy betAmount will be increase * Multiplier
-  console.log('bet amount is ----', betAmount);
-
-  console.log('line number 151 -----------------', slotResult);
+  logger.info(`Bet placed of amount ------------${betAmount}`);
   let transactionId = 'T' + getRandomNumber(16);
 
   let saveTransaction = {
@@ -164,8 +159,6 @@ const betAPI = async (
     id: userId,
     transactionId: transactionId,
   };
-
-  console.log('save transaction is ----', saveTransaction);
 
   /*
     let a = {
@@ -182,7 +175,7 @@ const betAPI = async (
     */
   let bet = await betRequest(transactionId, user, betAmount, gameDataResult, activeCampaign);
 
-  // now save this in transaction model
+  // now save this in transaction model that bet got placed
 
   let transactionSave;
   if (bet && bet.hasOwnProperty('txId') && bet.hasOwnProperty('balance')) {
@@ -211,7 +204,6 @@ const betAPI = async (
       balance: bet.balance, // balance can be taken from bet object
     };
   } else {
-    // return bet error
     return bet;
   }
 };
@@ -229,6 +221,8 @@ const winAPI = async (
   upgradeSpinTotalWin
 ) => {
   console.log('win api in game player controller ----', userId, gamePlay, gameId);
+
+  // in the end we are deciding the win amount
   let winAmount = isFreeSpinWin ? freeSpin.totalWin + upgradeSpinTotalWin : gamePlay.res.tw;
 
   console.log('win amount is --------', winAmount);
@@ -247,15 +241,18 @@ const winAPI = async (
 
   let win = await winRequest(transactionId, user, winAmount, gameId, gamePlay, betAmount, activeCampaign);
 
-  console.log('output from win controler is -----', win);
-  if (!win || win?.hasOwnProperty('transactionId') || win?.hasOwnProperty('balance')) {
+  const isValidWin = win && win.balance !== undefined && win.txId;
+
+  if (!isValidWin) {
     saveTransaction.apiError = true;
+    await saveWalletTransaction(saveTransaction, user);
+    return {
+      status: 'Failure',
+      message: 'Issue while playing the game',
+    };
   }
 
-  let transactionSaved = await saveWalletTransaction(saveTransaction, user);
-
-  console.log('saved transaction -----', transactionSaved);
-
+  await saveWalletTransaction(saveTransaction, user);
   return {
     status: 'SUCCESS',
     balance: win.balance,
@@ -272,9 +269,11 @@ const userBet = async (
   campaignFreeSpin,
   upgradeSpin
 ) => {
-  console.log('inside the user bet function ------');
-
-  console.log('is upgrade spin buy-----', isUpgradeSpinBuy);
+  logger.info(`Inside the user bet function -------userId is ------${userId} ----------betAmount is -----${betAmount}--------isFeatureBuy---${isFeatureBuy}-
+    --isUpgradedSpinBuy---${isUpgradeSpinBuy}-------free spins are -----${JSON.stringify(
+    freeSpin
+  )}----------campaign Free Spins are ---${JSON.stringify(campaignFreeSpin)}--
+    upgrade Spins are -----${JSON.stringify(upgradeSpin)}-`);
   let activeCampaign = null;
   const currentTime = Date.now();
 
@@ -287,7 +286,7 @@ const userBet = async (
 
         if (currentTime >= validFrom && currentTime <= validBefore && campaign.playedSpinCount < campaign.spinCount) {
           activeCampaign = campaign;
-          break; // ! why are we breaking it here
+          break; // ! why are we breaking it here -> because at one time one one campaign can exist
         }
       }
     }
@@ -303,7 +302,7 @@ const userBet = async (
       ? true
       : false;
 
-  console.log('is feature buy ---------', isFeatureBuy);
+  logger.info(`Campagin status is ------------${isActiveCampaign}`);
 
   let gameResult = await gamePlay(
     userId,
@@ -318,46 +317,34 @@ const userBet = async (
   );
 
   freeSpin = gameResult.freeSpin;
-
-  console.log('freespin are --line 318--- ', freeSpin);
-
   let walletBalance = 0;
   let win = null;
-
-  // this case will handle bet only can placed if betAmount >0 || or any active campaign is present
-  console.log('req bet amount before placing the bet---- ', reqBetAmount);
   if (reqBetAmount > 0 || (reqBetAmount === 0 && isActiveCampaign && freeSpin.count === 0)) {
     let bet = await betAPI(
       userId,
       reqBetAmount,
       user,
       gameResult.savedGame,
-      gameResult.res,
+      gameResult.res, // slotResult -> it come from game play
       isFeatureBuy,
       activeCampaign,
       freeSpin,
       isUpgradeSpinBuy
     );
 
+    logger.info(`Line 335 bet is -------------${JSON.stringify(bet)}`);
     if (bet.status !== 'SUCCESS') return bet;
 
-    // now we will call win API
-    gameResult.res.tw = 5; // making it static for now
-    console.log('bet line 239 is -----', bet);
-    console.log('game play line 294 ----', gameResult);
-
-    // if free spin are available it will not go here , only for active campagin and normal bet where bet amount > 0
+    // Only for active campagin OR normal bet where bet amount > 0
     if ((gameResult.res.tw > 0 || (activeCampaign && reqBetAmount === 0)) && !gameResult.res.fs && !gameResult.res.us) {
-      console.log('we will call the win api -----because the total win > 0');
       win = await winAPI(userId, gameResult, bet.gameId, bet.user, reqBetAmount, activeCampaign);
 
-      console.log('win is ------', win);
       if (win) {
         // update the balance in  gameResult
         gameResult.res.b = win.balance;
       }
 
-      console.log('win line number 346 ---------------', win);
+      console.log('win line number 370 ---------------', win);
     }
     // handling free spins here --
     else if (
@@ -392,9 +379,11 @@ const userBet = async (
       let userUpdate = {};
       userUpdate.campaigns = user.campaigns.map((campaign) => {
         if (campaign && campaign.campaignId === activeCampaign.campaignId) {
+          const campaignTotalWin = campaign?.totalWin ?? 0;
           return {
             ...campaign,
             playedSpinCount: campaign.playedSpinCount + 1,
+            totalWin: campaignTotalWin + gameResult.res.tw,
           };
         }
         return campaign;
@@ -405,20 +394,23 @@ const userBet = async (
 
       const campaignInstance = await Campaign(process.env.DbName + `-${user.consumerId}`);
 
-      const updatedPlayer = playerInstance
+      const updatedPlayer = await playerInstance
         .findOneAndUpdate({ _id: userId }, { $set: userUpdate }, { upsert: true, new: true })
         .lean();
 
       // upsert will create a new document if it's not present in db ---
-      const updatedCampaign = campaignInstance.findOneAndUpdate(
+      const updatedCampaign = await campaignInstance.findOneAndUpdate(
         { campaignId: activeCampaign.campaignId },
         { $set: { playedSpinCount: activeCampaign.playedSpinCount + 1 } },
         { upsert: true, new: true }
       );
+
       gameResult.res.campaign = {
+        totalCount: campaignFreeSpin.totalCount,
         left: campaignFreeSpin.count - 1,
         betAmount: campaignFreeSpin.betAmount,
-        vaildBefore: campaignFreeSpin.vaildBefore,
+        validBefore: campaignFreeSpin.validBefore,
+        totalWin: Number((campaignFreeSpin.totalWin + gameResult.res.tw).toFixed(2)),
       };
 
       console.log('game result campaign is ---------', gameResult.res.campaign);
@@ -429,7 +421,7 @@ const userBet = async (
       //
     }
   } else {
-    console.log('inside the else part-------');
+    console.log('inside the else part------HANDLING FREE SPINS ================-');
 
     let userUpdate = { freeSpin, upgradeSpin: user.upgradeSpin };
     console.log('user update are ------', userUpdate);
@@ -460,6 +452,7 @@ const userBet = async (
       }
     } else {
       gameResult.res.b = Number(user.balance);
+      console.log('balance now is -----------', gameResult.res.b);
     }
 
     const playerInstance = await Player(process.env.DbName + `-${user.consumerId}`);
@@ -484,11 +477,8 @@ const userBet = async (
 
 const gameBet = async (req, res) => {
   try {
-    console.log('bet api is --------');
-    let { userId, token, timeStamp, betAmount } = req?.body?.data !== undefined ? JSON.parse(req.body.data) : req.body;
-    console.log('user id is ----', userId, token, timeStamp, betAmount);
-
-    if (!userId || !token || !timeStamp || !isValidTwoDecimalNumber(betAmount)) {
+    let { userId, token, timestamp, betAmount } = req?.body?.data !== undefined ? JSON.parse(req.body.data) : req.body;
+    if (!userId || !token || !timestamp || !isValidTwoDecimalNumber(betAmount)) {
       return res.status(401).json({ status: 'ERROR', message: 'something went wrong!' });
     }
     // check that userId is valid or not
@@ -496,7 +486,6 @@ const gameBet = async (req, res) => {
       return res.status(401).json({ status: 'Error', message: 'User id is invalid' });
     }
     const previousSessionCheck = await hasPreviousSession(userId, token);
-    // ! For testing commenting it out
     if (!previousSessionCheck) {
       return res.status(401).json({
         status: 'UNAUTHORIZED',
@@ -506,13 +495,12 @@ const gameBet = async (req, res) => {
     betAmount = Number(parseFloat(betAmount).toFixed(2));
     let data = getTokenDetails(token);
 
-    console.log('data fetched from token is -----', data);
+    logger.info(`Data fetched from token --------------${JSON.stringify(data)}`);
     let consumerId = data?.providerName;
 
     let playerVerify = await verifyPlayer(userId, betAmount, false, consumerId);
-
-    console.log('playerVerify is -----', playerVerify);
     const reqBetAmount = betAmount;
+
     // if the bet amount is 0 and player got verified , in that case check the betAmount placed in freeSpin or upgradedSpin or campaignFreeSpin
     if (betAmount == 0 && playerVerify?.status != 'ERROR') {
       if (playerVerify.freeSpin.count > 0) {
@@ -523,6 +511,8 @@ const gameBet = async (req, res) => {
         betAmount = playerVerify.campaignFreeSpin.betAmount;
       }
     }
+
+    logger.info(`Player verification status ${playerVerify.status}:::::::::::::::::::::::`);
 
     console.log('bet amount line 536 going in game Bet function is -----------', betAmount);
     if (playerVerify.status === 'SUCCESS') {
@@ -538,9 +528,9 @@ const gameBet = async (req, res) => {
         playerVerify.upgradeSpin
       );
 
-      console.log('result is ----', result);
+      logger.info(`output after user bet function ------${JSON.stringify(result)}`);
       if (result.status === 'SUCCESS') {
-        await redis.set(`${redisDb}-token:${token}`, timeStamp, 'EX', 3600);
+        await redis.set(`${redisDb}-token:${token}`, timestamp, 'EX', 3600);
         await redis.set(`${redisDb}-user:${userId}`, token, 'EX', 3600);
 
         return res.status(200).json(result);
@@ -550,7 +540,8 @@ const gameBet = async (req, res) => {
     return res.status(401).json(playerVerify);
   } catch (error) {
     logErrorMessage(error);
-    console.log('error is ----', error);
+
+    logger.info(`Error is -----------${JSON.stringify(error)}`);
     throw error;
   }
 };
@@ -561,7 +552,7 @@ const closeGame = async (req, res, next) => {
   let token = req.params.urlToken.toString();
   let timeStamp = req.params.timeStamp.toString();
 
-  console.log('going to close the current session ----');
+  logger.info(`Going to close the current sessionn for ${userId}`);
   if (!isValidUserId(userId, token)) {
     return res.status(401).json({
       status: 'Error',
@@ -569,7 +560,7 @@ const closeGame = async (req, res, next) => {
     });
   } else {
     const isCurrenSession = await verifyCurrentSession(token, timeStamp);
-    console.log('current session is ----------', isCurrenSession);
+    logger.info(`Current session is ----${isCurrenSession}`);
     if (isCurrenSession) {
       return res.status(401).json({
         status: 'UNAUTHORIZED',
@@ -580,7 +571,7 @@ const closeGame = async (req, res, next) => {
 
   await redis.del(`${redisDb}-token:${token}`);
 
-  console.log('going to close the game ----');
+  logger.info(`Game got closed ------`);
   res.status(200).json({});
 };
 

@@ -9,7 +9,7 @@ const { logErrorMessage, apiLog } = require('../logs');
 
 const gameLauncher = async (req, res, next) => {
   try {
-    console.log('doing the game launch --');
+    logger.info(`GAME LAUNCH API CALLED -------------------`);
 
     const { error, value } = gameLaunchValidationSchema.validate(req.query);
     if (error) {
@@ -19,15 +19,14 @@ const gameLauncher = async (req, res, next) => {
       });
     }
 
-    console.log('value is----------', value);
-    console.log('validation completed ----------');
+    logger.info(`Validation got completed and validated data is  !! ${JSON.stringify(value)}`);
 
     let playerInfo = await playerInfoFinder(req.query);
-    console.log('player info recieved are -------', playerInfo);
+
+    logger.info(`Player data recieved --------${JSON.stringify(playerInfo)}`);
 
     let response = await gameLaunch(req.query, playerInfo);
-
-    console.log('response is -----', response);
+    logger.info(`response is ----------${JSON.stringify(response)}`);
 
     // store this data in redis
     const params = new URLSearchParams(response.url.split('?')[1]);
@@ -37,14 +36,14 @@ const gameLauncher = async (req, res, next) => {
     console.log('user id and token is ------', userId, token);
 
     let existingToken = await redis.get(`${redisDb}-user:${userId}`);
-
-    console.log('existing token present in redis is ----', existingToken);
+    logger.info(`Existing token present in redis ---------${existingToken}`);
 
     if (existingToken) {
       await redis.del(`${redisDb}-user:${userId}`);
     }
 
     // key value stored are ----[redisDb-user:123]
+    logger.info(`setting the key ${redisDb}-user:${userId}`);
     await redis.set(`${redisDb}-user:${userId}`, token, 'EX', 3600); // 1hr window size
 
     apiLog(`url generated from the  Game launch Api${response}`);
@@ -54,7 +53,7 @@ const gameLauncher = async (req, res, next) => {
     const errorData = axiosError?.response?.data;
 
     if (errorData) {
-      console.log('output is -----------', JSON.stringify(errorData));
+      logger.info(`error is --------------${errorData}-`);
       logErrorMessage(JSON.stringify(errorData));
     } else {
       console.error('Unexpected error structure', JSON.stringify(error));
@@ -94,10 +93,9 @@ const saveGamePlay = async (userId, betAmount, slotResult, user, isFeatureBuy, m
       isFeatureBuy: isFeatureBuy,
       maxWinningExceeded,
     };
-    console.log('gamePlaye data is ----', gamePlayData);
+    logger.info(`Game player data is -------------${JSON.stringify(gamePlayData)}`);
     const gamePlay = new gameInstace(gamePlayData);
     let savedGame = await gamePlay.save();
-    console.log('saved game is ----', savedGame);
 
     return {
       status: 'SUCCESS',

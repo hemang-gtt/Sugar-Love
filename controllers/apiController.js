@@ -1,7 +1,7 @@
 const { postReq } = require('../api');
 
 const playerInfoFinder = async (payload) => {
-  console.log('payload is ------', payload);
+  logger.info(`payload is -----------${JSON.stringify(payload)}`);
 
   const { consumerId, sessionToken } = payload;
   let player = { consumerId };

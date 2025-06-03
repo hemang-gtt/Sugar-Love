@@ -8,6 +8,7 @@ const { createMasterCampaign, createCampaign, cancelCampaign } = require('./cont
 const { gameBet, closeGame } = require('./controllers/gamePlayController');
 
 const { freeSpin, upgradeSpin } = require('./controllers/spinController');
+const { startCron } = require('./cron');
 const app = express();
 
 const base_path = process.env.BASE_PATH;
@@ -19,8 +20,11 @@ app.use((req, res, next) => {
   res.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   next();
 });
+
 app.use(manualExpressJson);
 app.use(manualUrlEncoded);
+
+startCron(true);
 
 app.get(`${base_path}/health`, healthCheck);
 app.post(`${base_path}/game/launch`, gameLauncher);
@@ -46,6 +50,8 @@ app.post(`${base_path}/bonus/campaigns/freeSpins/cancel`, cancelCampaign);
 // 4> /freeSpins/win -> The request which provider sends when a player won from a free spin campaign. that how much free spin he won
 
 // if there is free spin then the bet amount will be 0
+
+console.log(`base path is -----------=> ${base_path}`);
 
 app.post(`${base_path}/close/:userId/:urlToken/:timeStamp`, closeGame);
 // we have to start the bet now , first check what are the apis and other various term

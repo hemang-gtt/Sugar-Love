@@ -1,12 +1,14 @@
 const { postReq } = require('../api');
-const { logErrorMessage, dbLog } = require('../logs');
+const { logErrorMessage, dbLog, apiLog } = require('../logs');
 const Bet = require('../models/betModel');
+
+const Refund = require('../models/refundModel');
 const masterController = require('../controllers/masterController');
-
+const { saveWalletTransaction } = require('../controllers/transactionController');
+const { getRandomNumber } = require('../utils/common');
+const logger = require('../utils/logger');
 const betRequest = async (transactionId, player, amount, gameDataResult, activeCampaign) => {
-  console.log('hi----inside the bet controller --');
-
-  console.log('game result is ------', gameDataResult);
+  logger.info(`Inside the bet controller ::::::::::::::::::::::::::::::::::::::::::::::::::::::`);
 
   let bet = {
     sessionToken: player.sessionToken,
@@ -23,7 +25,6 @@ const betRequest = async (transactionId, player, amount, gameDataResult, activeC
   if (activeCampaign && amount === 0) {
     bet.freespinCampaignId = activeCampaign.campaignId;
   }
-  console.log('bet object send to there api is  ------', bet);
   /*
    ----------------------------------SAMPLE BET OBJECT------------------------------
   {
@@ -39,6 +40,7 @@ const betRequest = async (transactionId, player, amount, gameDataResult, activeC
 
   */
 
+  logger.info(`Bet object send to them ::::::::::::::::::${JSON.stringify(bet)}`);
   try {
     const res = await postReq(player, bet, 'bet', player._id);
 
@@ -54,8 +56,6 @@ const betRequest = async (transactionId, player, amount, gameDataResult, activeC
     };
     */
 
-    console.log('res is ----', res);
-
     bet.responseTransactionId = res.processedTxId; // there transaction Id(Eva Platform side)
     bet.responseBalance = res.balance;
     bet.balanceDetails = res.balanceDetails;
@@ -67,16 +67,84 @@ const betRequest = async (transactionId, player, amount, gameDataResult, activeC
 
     const betInstance = await Bet(process.env.DbName + `-${player?.consumerId}`);
     const newBet = new betInstance(bet);
-    const betSavedData = await newBet.save();
-    console.log('bet data saved is ----', betSavedData);
-    // now save to master
+    await newBet.save();
     await masterController.saveToMaster(player._id, 'BET', bet, res, player, player?.consumerId);
 
     return res;
   } catch (error) {
     // ! Will handle the cancel api here ----------------
+
+    logger.info(`Error came in bet controller ---------------${JSON.stringify(error)}`);
+    if (error?.response?.data?.code === 'locked.player') {
+      let finalError = {
+        status: error?.response?.data?.code,
+        message: error?.response?.data?.message,
+      };
+      throw finalError;
+    } else {
+      logger.info(`Refund controller getting called ------------------`);
+      await cancelRequest(player, bet);
+    }
     console.log('error came is- ----', error);
     logErrorMessage(error);
+    return error;
+  }
+};
+
+const cancelRequest = async (player, bet) => {
+  let transactionId = 'T' + getRandomNumber(16);
+  let refund = {
+    playerId: player.playerId,
+    productId: player.productId,
+    txId: transactionId, // transaction id at our end
+    roundId: bet.roundId,
+    roundClosed: bet.roundClosed,
+    amount: bet.amount,
+    sideSplit: bet?.sideSplit, // only send in the case if it exists
+    currency: player.currency,
+  };
+
+  logger.info(`Refund object is ----------${JSON.stringify(refund)}`);
+
+  // let saveTransaction = {
+  //   amount: bet.amount,
+  //   transactionType: 'refund',
+  //   operation: 'REFUND',
+  //   status: 'SUCCESS',
+  //   id: player._id,
+  //   transactionId,
+  //   referenceTransactionId: bet.txId,
+  // };
+  try {
+    const res = await postReq(player, refund, 'cancel', player._id);
+
+    logger.info(`RESPONSE after refund ----------------${res}`);
+    apiLog(`POST req : REFUND -----------------Response is ${res}`);
+
+    refund.createdAt = res.createdAt;
+    refund.responseTransactionId = res.processedTxId;
+    refund.responseBalance = res.balance;
+    refund.alreadyProcessed = res.alreadyProcessed;
+    refund.balanceDetails = res.balanceDetails;
+    refund.txDetails = res.txDetails;
+    dbLog(`SET, req: Cancel, playerId: ${player._id}, data: ${JSON.stringify(refund)}`);
+
+    const refundInstance = await Refund(process.env.DbName + `-${player?.consumerId}`);
+    const newRefund = new refundInstance(refund);
+    await newRefund.save();
+
+    await masterController.saveToMaster(player._id, 'REFUND', refund, res.data, player, player.consumerId);
+    return res;
+  } catch (error) {
+    // if here the issue came then we save it to wallet transaction and will run later with cron
+
+    logger.info(`Error in Processing ----refund-----will handled by cron `);
+    logErrorMessage(error);
+    // saveTransaction.apiError = true;
+    // await saveWalletTransaction(saveTransaction, player); // ! we don't need it may be will check
+
+    console.log('error is refund request ---------', error);
+
     return error;
   }
 };

@@ -3,13 +3,6 @@ const Win = require('../models/winModel');
 const { postReq } = require('../api');
 const masterController = require('../controllers/masterController');
 const winRequest = async (transactionId, player, amount, gameId, gamePlay, betAmount, activeCampaign) => {
-  console.log('welcome to win controller ');
-
-  console.log('transaction id is ---------', transactionId);
-  console.log('win amount is ----------', amount);
-  console.log('bet Amount is -----------', betAmount);
-  console.log('game id is --------', gameId);
-
   let win = {
     type: 'REAL',
     playerId: player.playerId,
@@ -25,14 +18,25 @@ const winRequest = async (transactionId, player, amount, gameId, gamePlay, betAm
   console.log('win object is ----', win);
 
   // NEED TO CHECK -> !aciveCampaign
+  let isFreespinCampaignFinished = activeCampaign?.playedSpinCount + 1 >= activeCampaign?.totalSpinCount;
   if (activeCampaign && betAmount === 0) {
     win.type = 'Freespin';
     win.freespinCampaignId = activeCampaign.campaignId;
-    win.isFreespinCampaignFinished = activeCampaign.playedSpinCount + 1 >= activeCampaign.totalSpinCount;
+    win.isFreespinCampaignFinished = isFreespinCampaignFinished;
+    win.isLast = isFreespinCampaignFinished;
   }
 
+  // if(activeCampaign.freeSpins === 0){
+  //
+  // }
+
   try {
-    const res = await postReq(player, win, 'win', player._id);
+    let res;
+    if (activeCampaign) {
+      res = await postReq(player, win, 'campaignWin', player._id);
+    } else {
+      res = await postReq(player, win, 'win', player._id);
+    }
 
     /* ------------SAMPLE RESPONSE FROM WIN API -------------
     let a = {
@@ -66,6 +70,7 @@ const winRequest = async (transactionId, player, amount, gameId, gamePlay, betAm
 
     // we will do some thing here
     logErrorMessage(error);
+    return error?.response?.data;
   }
 };
 

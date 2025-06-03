@@ -1,4 +1,5 @@
 const Player = require('../models/playerModel');
+const CampaignMaster = require('../models/campaignMasterModel');
 const { redisClient: redis, redisDb } = require('../DB/redis');
 
 const {
@@ -12,9 +13,11 @@ const {
 const { apiLog, logErrorMessage } = require('../logs');
 const gameutils = require('../gamePlay/gameUtils');
 const { table1 } = require('../weights/tables');
+const logger = require('../utils/logger');
 
 const authorizePlayer = async (userId, urlToken, consumerId) => {
   const playerInstance = await Player(process.env.DbName + `-${consumerId}`);
+  const campaignMasterInstance = await CampaignMaster(process.env.DbName + `-${consumerId}`);
 
   let playerData = await playerInstance.findOne({ _id: userId }).lean();
   console.log('player data is -----', playerData, playerData.balance);
@@ -54,6 +57,16 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
     playerData = await playerInstance
       .findOneAndUpdate({ _id: userId }, { $set: { campaigns: finalCampaigns } }, { upsert: true, new: true })
       .lean();
+  }
+
+  // now at this stage we need to set inactive the campaign from campaign master if they are not there
+  const now = new Date();
+  const activeMasterCamapign = await campaignMasterInstance.find({ isActive: true }).lean();
+
+  const expiredIds = activeMasterCamapign.filter((c) => new Date(c.campaignEndDate) < now).map((c) => c._id);
+
+  if (expiredIds.length > 0) {
+    await campaignMasterInstance.updateMany({ _id: { $in: expiredIds } }, { $set: { isActive: false } });
   }
 
   // checking is currency valid and not change after game running
@@ -179,10 +192,8 @@ const loginHandler = async (req, res, next) => {
   try {
     // they are going to give us url and token
 
-    console.log('data coming here -----------', req.body);
     const { userId, urlToken } = req.body;
-    console.log('userID is -----', userId);
-    console.log('url token is ----', urlToken);
+    logger.info(`Inside login handler -------------${userId}--------and${urlToken}--------`);
 
     if (!userId || !urlToken) {
       return res.status(404).json({
@@ -199,9 +210,9 @@ const loginHandler = async (req, res, next) => {
 
     const previousSessionCheck = await hasPreviousSession(userId, urlToken);
 
-    console.log(previousSessionCheck);
+    console.log('previous session exists -------------', previousSessionCheck);
     // ! For testing just commenting it out
-    if (false && previousSessionCheck) {
+    if (previousSessionCheck) {
       return res.status(401).json({
         status: 'UNAUTHORIZED',
         message: 'Previous session is opened. Please close the previous game or start the game from the lobby...',
@@ -218,6 +229,7 @@ const loginHandler = async (req, res, next) => {
     let result = await authorizePlayer(userId, urlToken, consumerId);
     apiLog(`Result from login API ${result}`);
     if (result.status === 'SUCCESS') {
+      console.log('status here ---------------------', result.status);
       await redis.set(`${redisDb}-token:${urlToken}`, result.timestamp, 'EX', 3600); // [redisDB-token-123880:  12/05/2025-1:00]
       await redis.set(`${redisDb}-user:${userId}`, urlToken, 'EX', 3600); // [redisDb-user-Hemang, SampleToken]
 
@@ -283,7 +295,8 @@ const verifyPlayer = async (userId, betAmount, isFeatureBuy, consumerId) => {
     betAmount: 0,
   };
 
-  const campaignFreeSpin = { count: 0, betAmount: 0, vaildBefore: 0 };
+  const campaignFreeSpin = { count: 0, betAmount: 0, validBefore: 0, totalWin: 0, totalCount: 0 };
+
   const upgradeSpin = { count: 0, betAmount: 0 };
 
   let finalCampaigns = [];
@@ -306,10 +319,10 @@ const verifyPlayer = async (userId, betAmount, isFeatureBuy, consumerId) => {
     // Check for active campaign
     if (spinCount > 0) {
       // are there any existing free spin from campaign
-      campaignFreeSpin.count = spinCount;
+      (campaignFreeSpin.totalCount = finalCampaigns[0].spinCount), (campaignFreeSpin.count = spinCount);
       campaignFreeSpin.betAmount = finalCampaigns[0].totalBetAmount;
-      // !need to check what are we doing here
-      campaignFreeSpin.vaildBefore = new Date(finalCampaigns[0].validBefore).getTime() / 1000;
+      campaignFreeSpin.validBefore = new Date(finalCampaigns[0].validBefore).getTime() / 1000;
+      campaignFreeSpin.totalWin = finalCampaigns[0].totalWin ?? 0;
     }
 
     // Checking that are there any free spin available or not
@@ -339,6 +352,9 @@ const verifyPlayer = async (userId, betAmount, isFeatureBuy, consumerId) => {
     return { status: 'ERROR', message: 'Session is invalid!' };
   }
   const getCurrencyData = await CurrencyAPI(playerData.currency);
+
+  getCurrencyData.featureBuyRange.push(1);
+  console.log('get currency data is ------------', getCurrencyData);
   if (isFeatureBuy) {
     if (!getCurrencyData.featureBuyRange.includes(betAmount)) {
       return { status: 'ERROR', message: `Bet Amount is invalid!` };

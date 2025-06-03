@@ -6,12 +6,10 @@ const { userBet } = require('../controllers/gamePlayController');
 const { redisClient: redis, redisDb } = require('../DB/redis');
 
 const freeSpin = async (req, res) => {
-  let { userId, token, timeStamp, betAmount } = req.body.data !== undefined ? JSON.parse(req.body.data) : req.body;
+  console.log('someone bought the free -----spins ----------');
+  let { userId, token, timestamp, betAmount } = req.body.data !== undefined ? JSON.parse(req.body.data) : req.body;
 
-  console.log('user id is --------', userId, token, timeStamp, betAmount);
-
-  console.log('line number 9------', isValidTwoDecimalNumber(betAmount));
-  if (!userId || !token || !timeStamp || !isValidTwoDecimalNumber(betAmount) || Number(betAmount) < 0) {
+  if (!userId || !token || !timestamp || !isValidTwoDecimalNumber(betAmount) || Number(betAmount) < 0) {
     return res.status(401).json({ status: 'ERROR', message: 'something went wrong!' });
   }
 
@@ -49,7 +47,7 @@ const freeSpin = async (req, res) => {
     // isFeatureBuy true -, isUpgrade False
     let result = await userBet(userId, betAmount, playerVerify.data, true, false, playerVerify.freeSpin, reqBetAmount);
     if (result.status === 'SUCCESS') {
-      await redis.set(`${redisDb}-token:${token}`, timeStamp, 'EX', 3600);
+      await redis.set(`${redisDb}-token:${token}`, timestamp, 'EX', 3600);
       await redis.set(`${redisDb}-user:${userId}`, token, 'EX', 3600);
 
       return res.status(200).json(result);
@@ -61,12 +59,12 @@ const freeSpin = async (req, res) => {
 
 const upgradeSpin = async (req, res) => {
   console.log('sugar meter got fulled upgrade spin will get called ');
-  let { userId, token, timeStamp, betAmount } = req.body.data !== undefined ? JSON.parse(req.body.data) : req.body;
+  let { userId, token, timestamp, betAmount } = req.body.data !== undefined ? JSON.parse(req.body.data) : req.body;
 
-  console.log('user id is --------', userId, token, timeStamp, betAmount);
+  console.log('user id is --------', userId, token, timestamp, betAmount);
 
   console.log('line number 9------', isValidTwoDecimalNumber(betAmount));
-  if (!userId || !token || !timeStamp || !isValidTwoDecimalNumber(betAmount) || Number(betAmount) < 0) {
+  if (!userId || !token || !timestamp || !isValidTwoDecimalNumber(betAmount) || Number(betAmount) < 0) {
     return res.status(401).json({ status: 'ERROR', message: 'something went wrong!' });
   }
 
@@ -102,7 +100,7 @@ const upgradeSpin = async (req, res) => {
     // isFeatureBuy true -, isUpgrade False
     let result = await userBet(userId, betAmount, playerVerify.data, false, true, playerVerify.freeSpin, reqBetAmount);
     if (result.status === 'SUCCESS') {
-      await redis.set(`${redisDb}-token:${token}`, timeStamp, 'EX', 3600);
+      await redis.set(`${redisDb}-token:${token}`, timestamp, 'EX', 3600);
       await redis.set(`${redisDb}-user:${userId}`, token, 'EX', 3600);
 
       return res.status(200).json(result);
