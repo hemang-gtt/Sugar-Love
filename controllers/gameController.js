@@ -6,6 +6,7 @@ const gameModel = require('../models/gameModel');
 
 const { redisClient: redis, redisDb } = require('../DB/redis');
 const { logErrorMessage, apiLog } = require('../logs');
+const logger = require('../utils/logger');
 
 const gameLauncher = async (req, res, next) => {
   try {
@@ -33,7 +34,7 @@ const gameLauncher = async (req, res, next) => {
     const userId = params.get('userId');
     const token = params.get('token');
 
-    console.log('user id and token is ------', userId, token);
+    logger.info(`User id ------------${userId} and token is ------------${token}`);
 
     let existingToken = await redis.get(`${redisDb}-user:${userId}`);
     logger.info(`Existing token present in redis ---------${existingToken}`);
@@ -56,7 +57,7 @@ const gameLauncher = async (req, res, next) => {
       logger.info(`error is --------------${errorData}-`);
       logErrorMessage(JSON.stringify(errorData));
     } else {
-      console.error('Unexpected error structure', JSON.stringify(error));
+      logger.info('Unexpected error structure', JSON.stringify(error));
     }
 
     return res.status(422).json({ error: errorData || 'Unknown error' });
@@ -73,8 +74,6 @@ const saveGamePlay = async (userId, betAmount, slotResult, user, isFeatureBuy, m
   maxWinningExceeded: false
   }
   */
-
-  console.log(`slot result is --during saving the game --`, slotResult); // i think it will have the value in case of feature buy
   if (userId && user.currency) {
     const gameInstace = await gameModel(process.env.DbName + `-${user?.consumerId}`);
 

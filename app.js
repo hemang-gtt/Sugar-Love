@@ -51,8 +51,6 @@ app.post(`${base_path}/bonus/campaigns/freeSpins/cancel`, cancelCampaign);
 
 // if there is free spin then the bet amount will be 0
 
-console.log(`base path is -----------=> ${base_path}`);
-
 app.post(`${base_path}/close/:userId/:urlToken/:timeStamp`, closeGame);
 // we have to start the bet now , first check what are the apis and other various term
 

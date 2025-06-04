@@ -1,6 +1,7 @@
 const { logError } = require('../logs');
 const Player = require('../models/playerModel');
 const Transaction = require('../models/transactionModel');
+const logger = require('../utils/logger');
 
 // here amount refered to bet amount in bet case
 const saveWalletTransaction = async (
@@ -13,8 +14,7 @@ const saveWalletTransaction = async (
   freeSpin
 ) => {
   try {
-    console.log('transaction type is ------------', transactionType);
-
+    logger.info(`Transaction amount is ------------${amount} and type is ----------${transactionType}`);
     if (id && typeof amount === 'number' && transactionType && operation && status && transactionId) {
       if (!user) {
         return {
@@ -27,8 +27,8 @@ const saveWalletTransaction = async (
         const amountDecimal = amount;
         let userUpdate = {};
         if (transactionType === 'debit') {
-          console.log('type of balance -------------', typeof user.balance);
           if (user.balance < amountDecimal) {
+            // if debit is the case and the bet amount is greater thn player balance send error
             return {
               status: 'INSUFFICIENT_FUNDS',
               data: {},
@@ -46,7 +46,6 @@ const saveWalletTransaction = async (
               lastWin: Number(parseFloat(slotResult.tw).toFixed(2)),
             };
             if (slotResult?.fs?.c > 0) {
-              console.log('line 52 inside transaction controller ----------');
               freeSpin.totalWin = slotResult.tw;
               userUpdate = {
                 ...userUpdate,
@@ -80,10 +79,10 @@ const saveWalletTransaction = async (
           }
         } else if (transactionType === 'credit') {
           // win request
-          console.log('BALANCE:: ' + user.balance + ', amount : ' + amount);
+          logger.info('BALANCE:: ' + user.balance + ', amount : ' + amount);
 
           user.balance = Number(parseFloat((user.balance * 100 + amountDecimal * 100) / 100).toFixed(2));
-          console.log('balance after win is ----', user.balance);
+          logger.info('balance after win is ----', user.balance);
           userUpdate = {
             balance: user.balance.toString(),
             freeSpinRoundId: '',
@@ -98,7 +97,6 @@ const saveWalletTransaction = async (
           };
         }
 
-        console.log('user updates are --in transaction controller ---', userUpdate);
         // now save the win amount in db ----
         const playerInstance = await Player(process.env.DbName + `-${user.consumerId}`);
 
@@ -119,11 +117,9 @@ const saveWalletTransaction = async (
           createdDate: new Date(),
         };
 
-        console.log('data going to save in transaction model ------', transactionData);
+        logger.info('data going to save in transaction model ------', JSON.stringify(transactionData));
         const newTransaction = new transactionInstance(transactionData);
         let savedTransaction = await newTransaction.save();
-
-        console.log('saved transaction data is ---------', savedTransaction);
         let savedObj = {
           _id: savedTransaction.transactionId,
           walletBalance: savePlayer.balance,

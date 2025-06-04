@@ -74,9 +74,10 @@ const betRequest = async (transactionId, player, amount, gameDataResult, activeC
   } catch (error) {
     // ! Will handle the cancel api here ----------------
 
+    let finalError;
     logger.info(`Error came in bet controller ---------------${JSON.stringify(error)}`);
     if (error?.response?.data?.code === 'locked.player') {
-      let finalError = {
+      finalError = {
         status: error?.response?.data?.code,
         message: error?.response?.data?.message,
       };
@@ -85,9 +86,13 @@ const betRequest = async (transactionId, player, amount, gameDataResult, activeC
       logger.info(`Refund controller getting called ------------------`);
       await cancelRequest(player, bet);
     }
-    console.log('error came is- ----', error);
+
     logErrorMessage(error);
-    return error;
+    finalError = {
+      status: error?.response?.data.code || 'Internal Error',
+      message: error?.response?.data?.message || 'Some Issue Occured while Placing the bet',
+    };
+    return finalError;
   }
 };
 
@@ -118,8 +123,8 @@ const cancelRequest = async (player, bet) => {
   try {
     const res = await postReq(player, refund, 'cancel', player._id);
 
-    logger.info(`RESPONSE after refund ----------------${res}`);
-    apiLog(`POST req : REFUND -----------------Response is ${res}`);
+    logger.info(`RESPONSE after refund ----------------${JSON.stringify(res)}`);
+    apiLog(`POST req : REFUND -----------------Response is ${JSON.stringify(res)}`);
 
     refund.createdAt = res.createdAt;
     refund.responseTransactionId = res.processedTxId;
@@ -137,13 +142,11 @@ const cancelRequest = async (player, bet) => {
     return res;
   } catch (error) {
     // if here the issue came then we save it to wallet transaction and will run later with cron
-
-    logger.info(`Error in Processing ----refund-----will handled by cron `);
     logErrorMessage(error);
     // saveTransaction.apiError = true;
     // await saveWalletTransaction(saveTransaction, player); // ! we don't need it may be will check
 
-    console.log('error is refund request ---------', error);
+    logger.info(`Error in refund request is ------------`, error);
 
     return error;
   }

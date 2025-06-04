@@ -15,8 +15,6 @@ const winRequest = async (transactionId, player, amount, gameId, gamePlay, betAm
     // side split is optional
   };
 
-  console.log('win object is ----', win);
-
   // NEED TO CHECK -> !aciveCampaign
   let isFreespinCampaignFinished = activeCampaign?.playedSpinCount + 1 >= activeCampaign?.totalSpinCount;
   if (activeCampaign && betAmount === 0) {
@@ -26,9 +24,7 @@ const winRequest = async (transactionId, player, amount, gameId, gamePlay, betAm
     win.isLast = isFreespinCampaignFinished;
   }
 
-  // if(activeCampaign.freeSpins === 0){
-  //
-  // }
+  logger.info(`Win object send to there api is ---------${JSON.stringify(win)}`);
 
   try {
     let res;
@@ -48,8 +44,6 @@ const winRequest = async (transactionId, player, amount, gameId, gamePlay, betAm
     };
 
     */
-
-    console.log('response from win API is ----------', res);
     win.responseTransactionId = res.processedTxId;
     win.responseBalance = res.balance;
     win.balanceDetails = res.balanceDetails;
@@ -57,18 +51,17 @@ const winRequest = async (transactionId, player, amount, gameId, gamePlay, betAm
     win.createdAt = res.createdAt;
     win.txDetails = res.txDetails;
 
-    console.log('win object which we are going to save in the model -----------', win);
+    logger.info(`Win data saved in model--------${JSON.stringify(win)}`);
     const winInstance = await Win(process.env.DbName + `-${player?.consumerId}`);
     const newWin = new winInstance(win);
-    const savedWin = await newWin.save();
-    console.log('saved win object is ---------', savedWin);
+    await newWin.save();
     await masterController.saveToMaster(player._id, 'WIN', win, res, player, player?.consumerId);
 
     return res;
   } catch (error) {
     console.log('error is ----', error);
 
-    // we will do some thing here
+    // we will do some thing here  can handle some cases :: //! NEED TO CHECK LATER
     logErrorMessage(error);
     return error?.response?.data;
   }

@@ -1,4 +1,5 @@
 const { Redis } = require('ioredis');
+const logger = require('../utils/logger');
 let redisClient;
 
 if (process.env.IS_CLUSTER === 'true') {
@@ -9,8 +10,6 @@ if (process.env.IS_CLUSTER === 'true') {
     },
   });
 } else {
-  console.log('here ----------');
-
   redisClient = new Redis({
     username: process.env.REDIS_USERNAME,
     port: Number(process.env.REDIS_PORT),
@@ -20,11 +19,11 @@ if (process.env.IS_CLUSTER === 'true') {
 }
 
 redisClient.on('error', (err) => {
-  console.log('error while connecting redis');
+  logger.info('error while connecting redis');
 });
 
 const redisDb = process.env.DbName;
 
-console.log(`Connected to redis on the port ${process.env.REDIS_PORT} and database name is ${redisDb}`);
+logger.info(`Connected to redis on the port ${process.env.REDIS_PORT} and database name is ${redisDb}`);
 
 module.exports = { redisClient, redisDb };

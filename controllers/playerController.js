@@ -16,11 +16,11 @@ const { table1 } = require('../weights/tables');
 const logger = require('../utils/logger');
 
 const authorizePlayer = async (userId, urlToken, consumerId) => {
+  logger.info(`Authorizing the player ----------------`);
   const playerInstance = await Player(process.env.DbName + `-${consumerId}`);
   const campaignMasterInstance = await CampaignMaster(process.env.DbName + `-${consumerId}`);
 
   let playerData = await playerInstance.findOne({ _id: userId }).lean();
-  console.log('player data is -----', playerData, playerData.balance);
 
   if (playerData?.token != urlToken) {
     return {
@@ -29,13 +29,9 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
       message: 'Unauthorized: You do not have permission to perform this action.',
     };
   }
-
-  console.log('player balance is ----', playerData.balance);
   let spinCount = 0; // contain the count of spin available
   let finalCampaigns = [];
   const currentTime = new Date();
-
-  console.log('player data campaign is ----', playerData.campaigns);
 
   // calculating the number of spinCount at a stage
   for (const campaign of playerData.campaigns) {
@@ -52,7 +48,11 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
       }
     }
   }
-  console.log(`--player data campagin ----${playerData.campaigns.length} ----final campaign ${finalCampaigns.length}`);
+  logger.info(
+    `--player data campagin ----${JSON.stringify(playerData.campaigns)} ----final campaign ${JSON.stringify(
+      finalCampaigns
+    )}`
+  );
   if (playerData.campaigns.length !== finalCampaigns.length) {
     playerData = await playerInstance
       .findOneAndUpdate({ _id: userId }, { $set: { campaigns: finalCampaigns } }, { upsert: true, new: true })
@@ -72,7 +72,7 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
   // checking is currency valid and not change after game running
   if (process.env.CHECK_VALID_CURRENCY_ON_LOGIN === 'true') {
     const checkValidCurrency = await isValidCurrencyProxy(playerData.currency);
-    console.log('check valid currency output is -----', checkValidCurrency);
+    logger.info(`Check valid currency output is -----------${JSON.stringify(checkValidCurrency)}`);
     if (!checkValidCurrency.isValid) {
       return {
         status: 'ERROR',
@@ -109,9 +109,6 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
     Number(process.env.FEATURE_BUY_STEP),
     true
   );
-
-  console.log('get featurebuy data is --------', getFeatureBuyData);
-  console.log('currency data api response is ----', getCurrencyData);
   let timestamp = Math.floor(new Date().getTime() / 1000);
   let username = playerData.consumerId;
   let lastBet = playerData.lastBet;
@@ -121,7 +118,6 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
     (playerData?.freeSpin?.isActive && playerData?.upgradeSpin?.count < playerData.upgradeSpin?.required) ||
     (!playerData?.freeSpin?.isActive && playerData?.upgradeSpin?.activeCount == 0)
   ) {
-    console.log(' i am cming here in free spin section -----');
     let newUpgradeSpin = {
       required:
         process.env.DUMMY_DATA_TESTING === 'true'
@@ -132,14 +128,12 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
       betAmount: -1,
       totalWin: 0,
     };
-    console.log('new upgraded spin is -----', newUpgradeSpin);
     playerData = await playerInstance
       .findOneAndUpdate({ _id: userId }, { $set: { upgradeSpin: newUpgradeSpin } }, { upsert: true, new: true })
       .lean();
   }
 
-  console.log('player data line 127 is -----', playerData);
-  console.log('balance is -----', playerData.balance);
+  logger.info(`player data is ----------${JSON.stringify(playerData)}`);
 
   let response = {
     status: 'SUCCESS',
@@ -157,8 +151,6 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
     step: getCurrencyData.step,
     fbArr: getFeatureBuyData.arr,
   };
-
-  console.log('response in line 141 is ----', response);
 
   if (playerData?.freeSpin?.count > 0) {
     response.freeSpin = playerData.freeSpin;
@@ -183,8 +175,6 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
     response.lastWin = playerData.lastWin;
   }
 
-  console.log('response generated after authorization -----', response);
-
   return response;
 };
 
@@ -193,7 +183,7 @@ const loginHandler = async (req, res, next) => {
     // they are going to give us url and token
 
     const { userId, urlToken } = req.body;
-    logger.info(`Inside login handler -------------${userId}--------and${urlToken}--------`);
+    logger.info(`Inside login handler ----------userId---${userId}--------and url token is --${urlToken}--------`);
 
     if (!userId || !urlToken) {
       return res.status(404).json({
@@ -209,9 +199,6 @@ const loginHandler = async (req, res, next) => {
     }
 
     const previousSessionCheck = await hasPreviousSession(userId, urlToken);
-
-    console.log('previous session exists -------------', previousSessionCheck);
-    // ! For testing just commenting it out
     if (previousSessionCheck) {
       return res.status(401).json({
         status: 'UNAUTHORIZED',
@@ -221,15 +208,14 @@ const loginHandler = async (req, res, next) => {
 
     let data = getTokenDetails(urlToken);
 
-    console.log('data fetched from token is -----', data);
+    logger.info(`Data fetched from token is ---${JSON.stringify(data)}`);
     let consumerId = data?.providerName;
 
-    console.log(`consumer id is ---${consumerId}`);
-
     let result = await authorizePlayer(userId, urlToken, consumerId);
+
     apiLog(`Result from login API ${result}`);
+
     if (result.status === 'SUCCESS') {
-      console.log('status here ---------------------', result.status);
       await redis.set(`${redisDb}-token:${urlToken}`, result.timestamp, 'EX', 3600); // [redisDB-token-123880:  12/05/2025-1:00]
       await redis.set(`${redisDb}-user:${userId}`, urlToken, 'EX', 3600); // [redisDb-user-Hemang, SampleToken]
 
@@ -237,7 +223,7 @@ const loginHandler = async (req, res, next) => {
     }
     return res.status(401).json(result);
   } catch (error) {
-    console.log(error);
+    logger.info(`Error in login handle --------${JSON.stringify(error)}`);
     logErrorMessage(error);
     throw error;
   }
@@ -245,8 +231,6 @@ const loginHandler = async (req, res, next) => {
 
 const verifyPlayer = async (userId, betAmount, isFeatureBuy, consumerId) => {
   const playerInstance = await Player(process.env.DbName + `-${consumerId}`);
-
-  console.log('user id is ---', userId);
   let playerData = await playerInstance.findOne({ _id: userId }).lean();
   if (!playerData) {
     return {
@@ -255,8 +239,6 @@ const verifyPlayer = async (userId, betAmount, isFeatureBuy, consumerId) => {
     };
   }
 
-  // player is banned !!!
-
   if (playerData.isBanned) {
     return { status: 'ERROR', message: 'Banned player !!!' };
   }
@@ -264,7 +246,7 @@ const verifyPlayer = async (userId, betAmount, isFeatureBuy, consumerId) => {
   // Today's limit reached !!!
   let maxGamesAllowedInASingleDay = await redis.hget(`${redisDb}:admin`, 'maxGamesAllowedInASingleDay');
 
-  console.log(`maxGamesAllowedInASingleDay----${maxGamesAllowedInASingleDay}`);
+  logger.info(`maxGamesAllowedInASingleDay----${maxGamesAllowedInASingleDay}`);
   if (maxGamesAllowedInASingleDay && playerData.todayGameCount >= Number(maxGamesAllowedInASingleDay)) {
     return { status: 'ERROR', message: `Today's limit reached !!` };
   } else if (playerData.todayGameCount >= Number(process.env.SINGLE_DAY_MAX_GAMES_ALLOWED)) {
@@ -353,8 +335,8 @@ const verifyPlayer = async (userId, betAmount, isFeatureBuy, consumerId) => {
   }
   const getCurrencyData = await CurrencyAPI(playerData.currency);
 
-  getCurrencyData.featureBuyRange.push(1);
-  console.log('get currency data is ------------', getCurrencyData);
+  // getCurrencyData.featureBuyRange.push(1); // ! remove this line later
+  logger.info(`Currency data fetched from api is ----------${JSON.stringify(getCurrencyData)}`);
   if (isFeatureBuy) {
     if (!getCurrencyData.featureBuyRange.includes(betAmount)) {
       return { status: 'ERROR', message: `Bet Amount is invalid!` };

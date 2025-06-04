@@ -1,9 +1,6 @@
 const { getRandom } = require('../utils/common');
 const { freeSpins } = require('../weights/tables');
 
-console.log('get random fn is ---', getRandom);
-console.log('free spins are ----', freeSpins);
-
 exports.getIndex = {
   FG: 0,
   H1: 1,
@@ -116,9 +113,6 @@ exports.printBoard = (board, refText = '') => {
     console.log(refText);
 
     board.forEach((row) => console.log(row.join(' ')));
-    // console.log(JSON.stringify(board).replace(/],/g, "],\n").replaceAll("[", "").replaceAll("]", "").replaceAll(null, " "));
-    // console.log(JSON.stringify(board).replace(/],/g, "],\n").replace("[[", "[\n[").replace("]]", "]\n]"));
-    // console.log(JSON.stringify(transpose(board)).replace(/],/g, "],\n").replace("[[", "[\n[").replace("]]", "]\n]"));  // transpose
   }
 };
 

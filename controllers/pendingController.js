@@ -9,12 +9,11 @@ const { logErrorMessage } = require('../logs');
 
 const resolvePending = async () => {
   try {
-    console.log('resolve the pending task ----------');
+    logger.info(`Resolving the pending task-----------------`);
     let pendingInstance = await Pending(process.env.DbName);
 
     let data = await pendingInstance.find();
 
-    console.log('data needs to be resolved ---------', data);
     let isAllResolved = true;
     for (let i = 0; i < data.length; i++) {
       let req = data[i];
@@ -22,7 +21,7 @@ const resolvePending = async () => {
       let parsedRequest = JSON.parse(req.request);
 
       let providerName = parsedRequest.consumerId;
-      if (req.type === 'win') {
+      if (req.type === 'win' || req.type === 'campaignWin') {
         resp = await pendingWinRequest(parsedRequest, req.type, 0, true, providerName);
       } else if (req.type === 'cancel') {
         resp = await pendingCancelRequest(parsedRequest, req.type, 0, true, providerName);
@@ -43,8 +42,6 @@ const resolvePending = async () => {
           { new: true }
         );
 
-        console.log('updated transaction is ---------', updatedTransaction);
-
         await pendingInstance.findByIdAndDelete(req._id).lean();
       } else {
         isAllResolved = false;
@@ -53,13 +50,11 @@ const resolvePending = async () => {
     return isAllResolved;
   } catch (error) {
     logErrorMessage(error);
-    console.log('error in resolve pending is ---------', error);
   }
 };
 
 const pendingWinRequest = async (win, requestType, maxRetries, alreadyInPending, providerName) => {
-  console.log('win object is -----------', win);
-  console.log('provider name is ---------', providerName);
+  logger.info(`Win object is --------${JSON.stringify(win)}------request type is -----${JSON.stringify(requestType)}`);
 
   const winDetails = await pendingPostReq(win, requestType, 0, alreadyInPending, providerName);
   win.responseTransactionId = winDetails.data.processedTxId;
@@ -69,23 +64,20 @@ const pendingWinRequest = async (win, requestType, maxRetries, alreadyInPending,
   win.createdAt = winDetails.data.createdAt;
   win.txDetails = winDetails.data.txDetails;
 
-  console.log('data going to save in the win is ---------', win);
+  logger.info('data going to save in the win is ---------', win);
   const winInstance = await Win(process.env.DbName + `-${providerName}`);
   const newWin = new winInstance(win);
-  const winData = await newWin.save();
-  console.log('data saved in win model is ---------', winData);
+  await newWin.save();
   await saveToMaster(win.playerId, 'WIN', win, winDetails.data, null, providerName);
 
-  console.log('win details data is ----', winDetails.data);
+  logger.info(`Win details data is ------${winDetails.data}`);
   return winDetails.data;
 };
 
 const pendingCancelRequest = async (refund, requestType, maxRetries, alreadyInPending, providerName) => {
-  console.log('refund object is- ----', refund);
-  console.log('provider name is -----------', providerName);
-  const res = await pendingPostReq(refund, requestType, maxRetries, alreadyInPending);
+  logger.info(`Refund object is-----------${JSON.stringify(refund)}`);
 
-  console.log('refund object is -----------', refund);
+  const res = await pendingPostReq(refund, requestType, maxRetries, alreadyInPending);
 
   refund.createdAt = res.data.createdAt;
   refund.responseTransactionId = res.data.processedTxId;
@@ -94,7 +86,8 @@ const pendingCancelRequest = async (refund, requestType, maxRetries, alreadyInPe
   refund.balanceDetails = res.data.balanceDetails;
   refund.txDetails = res.data.txDetails;
 
-  console.log('refund is ----------', refund);
+  logger.info(`Refund object is --------${refund}---------and provider name is ----${providerName}`);
+
   const refundInstance = await Refund(process.env.DbName + `-${providerName}`);
   const newRefund = new refundInstance(refund);
   await newRefund.save();
@@ -116,14 +109,15 @@ const pendingPostReq = async (
   };
 
   let url = process.env.API_BASE_URL + requestType;
-  console.log('url is ----------', url);
+  if (requestType === 'campaignWin') {
+    url = process.env.API_BASE_URL + 'freeSpins/win';
+  }
 
   try {
     const response = await axios.post(url, data, { headers, timeout });
-    console.log('response data is --------------', response.data);
     return response;
   } catch (error) {
-    console.log('error is --------', error);
+    logger.info(`Error is ------${JSON.stringify(error)}`);
     let res = error?.response?.data;
     let errorRes = {
       response: {
@@ -139,7 +133,7 @@ const pendingPostReq = async (
 
 const saveToPending = async (data, requestType, playerId) => {
   try {
-    console.log('i got called ----------save to pending schema------');
+    logger.info(`Saving to pending scehma-----------------`);
     const pendingInstance = await Pending(process.env.DbName);
     const pendingObject = {
       userId: playerId,
@@ -150,11 +144,11 @@ const saveToPending = async (data, requestType, playerId) => {
       timestamp: Math.floor(new Date().getTime() / 1000),
     };
 
-    console.log('pending object is -------', pendingObject);
+    logger.info(`Pending object is -------------${JSON.stringify(pendingObject)}`);
     const pendingTask = new pendingInstance(pendingObject);
     await pendingTask.save();
   } catch (error) {
-    console.log('error is ----------', error);
+    logger.info('error is ------------', error);
   }
 };
 

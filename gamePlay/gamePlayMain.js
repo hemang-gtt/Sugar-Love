@@ -425,8 +425,7 @@ exports.playGame = (balance, betAmount, upgradeSpin, freeSpin, isFeatureBuy, isA
 };
 
 exports.checkFreeSpin = (game, freeSpin, res, betAmount, isFeatureBuy, isActiveCampaign, maxWinningExceeded) => {
-  console.log('game is while check free spin called -----------', game);
-  console.log('is  campaign active ');
+  logger.info(`Checking free spins ----`);
   if (game.scatters.length > 0 && !maxWinningExceeded) {
     res.sc = game.scatters.join(',');
   }

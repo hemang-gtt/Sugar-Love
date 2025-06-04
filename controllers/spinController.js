@@ -4,9 +4,10 @@ const { verifyPlayer } = require('./playerController');
 const { userBet } = require('../controllers/gamePlayController');
 
 const { redisClient: redis, redisDb } = require('../DB/redis');
+const logger = require('../utils/logger');
 
 const freeSpin = async (req, res) => {
-  console.log('someone bought the free -----spins ----------');
+  logger.info(`User Buy the free Spins:::::::::::::::::::::::::::::::::::::: `);
   let { userId, token, timestamp, betAmount } = req.body.data !== undefined ? JSON.parse(req.body.data) : req.body;
 
   if (!userId || !token || !timestamp || !isValidTwoDecimalNumber(betAmount) || Number(betAmount) < 0) {
@@ -30,17 +31,11 @@ const freeSpin = async (req, res) => {
   }
   betAmount = parseFloat(betAmount);
 
-  console.log('bet amount is ----', betAmount);
   let data = getTokenDetails(token);
-  console.log('data recieved from token ------', data);
 
   let consumerId = data?.providerName;
 
-  console.log('consumer id is ----', consumerId);
-
   let playerVerify = await verifyPlayer(userId, betAmount, true, consumerId);
-
-  console.log('player verify is ---', playerVerify);
 
   const reqBetAmount = betAmount;
   if (playerVerify.status === 'SUCCESS') {
@@ -58,12 +53,9 @@ const freeSpin = async (req, res) => {
 };
 
 const upgradeSpin = async (req, res) => {
-  console.log('sugar meter got fulled upgrade spin will get called ');
+  logger.info(`Sugar Meter got filled ------------------------:::::::::::::::::`);
   let { userId, token, timestamp, betAmount } = req.body.data !== undefined ? JSON.parse(req.body.data) : req.body;
 
-  console.log('user id is --------', userId, token, timestamp, betAmount);
-
-  console.log('line number 9------', isValidTwoDecimalNumber(betAmount));
   if (!userId || !token || !timestamp || !isValidTwoDecimalNumber(betAmount) || Number(betAmount) < 0) {
     return res.status(401).json({ status: 'ERROR', message: 'something went wrong!' });
   }
@@ -83,17 +75,11 @@ const upgradeSpin = async (req, res) => {
   }
   betAmount = parseFloat(betAmount);
 
-  console.log('bet amount is ----', betAmount);
   let data = getTokenDetails(token);
-  console.log('data recieved from token ------', data);
 
   let consumerId = data?.providerName;
 
-  console.log('consumer id is ----', consumerId);
-
   let playerVerify = await verifyPlayer(userId, betAmount, true, consumerId);
-
-  console.log('player verify is ---', playerVerify);
 
   const reqBetAmount = betAmount;
   if (playerVerify.status === 'SUCCESS') {

@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const { redisClient: redis, redisDb } = require('../DB/redis');
 const { rng } = require('../rng');
+const logger = require('./logger');
 const getTodayDateTime = () => {
   const currentDate = new Date();
 
@@ -39,10 +40,8 @@ const isValidUserId = (userId, urlToken) => {
 
 const hasPreviousSession = async (userId, urlToken) => {
   let existingToken = await redis.get(`${redisDb}-user:${userId}`);
-  console.log('existing otken ----', existingToken);
   if (existingToken && existingToken === urlToken) {
     let userExists = await redis.get(`${redisDb}-token:${urlToken}`);
-    console.log('user exist ----', userExists);
     if (!userExists) {
       return false;
     }
@@ -51,9 +50,7 @@ const hasPreviousSession = async (userId, urlToken) => {
 };
 
 const getTokenDetails = (urlToken) => {
-  console.log('url token is ---------', urlToken);
   const tokenData = jwt.verify(urlToken, process.env.JWT_SECRET_KEY);
-
   return tokenData;
 };
 
@@ -114,7 +111,7 @@ const CurrencyAPI = async (currency) => {
     const game = process.env.GAME_NAME;
     const vendor = process.env.VENDOR_NAME;
 
-    console.log(`game is -----${game}---------vendor is ------${vendor}`);
+    logger.info(`game is -----${game}---------vendor is ------${vendor}`);
 
     let finalURL = process.env.CURRENCY_URL + `/get-currency-range/${currency}/${game}/${vendor}`;
 
