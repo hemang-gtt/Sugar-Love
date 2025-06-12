@@ -102,8 +102,6 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
     Number(process.env.MAX_STAKE),
     Number(process.env.STEP)
   );
-
-  console.log('currency data is ----', getCurrencyData);
   const getFeatureBuyData = await CurrencyAPI(
     playerData.currencyCode,
     Number(process.env.FEATURE_BUY_MIN),
@@ -112,7 +110,6 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
     true
   );
 
-  console.log('get Feature data is ---------', getFeatureBuyData);
   let timestamp = Math.floor(new Date().getTime() / 1000);
   let username = playerData.consumerId;
   let lastBet = playerData.lastBet;
@@ -136,8 +133,6 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
       .findOneAndUpdate({ _id: userId }, { $set: { upgradeSpin: newUpgradeSpin } }, { upsert: true, new: true })
       .lean();
   }
-
-  console.log('get currency data is ----------', getCurrencyData);
   logger.info(`player data is ----------${JSON.stringify(playerData)}`);
 
   let response = {
