@@ -22,7 +22,12 @@ app.use((req, res, next) => {
   next();
 });
 
-const whitelist = ['https://gametimetec.com', 'https://games.gttcasino.com', 'https://gttcasino.com'];
+const whitelist = [
+  'http://192.168.2.195:5501',
+  'https://gametimetec.com',
+  'https://games.gttcasino.com',
+  'https://gttcasino.com',
+];
 const corsOptions = {
   origin: function (origin, callback) {
     if (whitelist.indexOf(origin) !== -1 || !origin) {

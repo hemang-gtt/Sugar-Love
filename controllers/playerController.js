@@ -96,19 +96,23 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
     }
   }
 
-  const getCurrencyData = await currencyAPIProxy(
+  const getCurrencyData = await CurrencyAPI(
     playerData.currency,
     Number(process.env.MIN_STAKE),
     Number(process.env.MAX_STAKE),
     Number(process.env.STEP)
   );
-  const getFeatureBuyData = await currencyAPIProxy(
+
+  console.log('currency data is ----', getCurrencyData);
+  const getFeatureBuyData = await CurrencyAPI(
     playerData.currencyCode,
     Number(process.env.FEATURE_BUY_MIN),
     Number(process.env.FEATURE_BUY_MAX),
     Number(process.env.FEATURE_BUY_STEP),
     true
   );
+
+  console.log('get Feature data is ---------', getFeatureBuyData);
   let timestamp = Math.floor(new Date().getTime() / 1000);
   let username = playerData.consumerId;
   let lastBet = playerData.lastBet;
@@ -133,6 +137,7 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
       .lean();
   }
 
+  console.log('get currency data is ----------', getCurrencyData);
   logger.info(`player data is ----------${JSON.stringify(playerData)}`);
 
   let response = {
@@ -145,10 +150,10 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
     lastWin,
     balance: playerData.balance,
     currencyPrefix: playerData.currency,
-    minStake: getCurrencyData.min,
-    maxStake: getCurrencyData.max,
-    defaultStake: getCurrencyData.base,
-    step: getCurrencyData.step,
+    rate: getCurrencyData?.rate,
+    range: getCurrencyData?.range,
+    buttons: getCurrencyData?.buttons,
+    defaultBet: getCurrencyData?.defaultBet,
     fbArr: getFeatureBuyData.arr,
   };
 
@@ -180,6 +185,7 @@ const authorizePlayer = async (userId, urlToken, consumerId) => {
 
 const loginHandler = async (req, res, next) => {
   try {
+    console.log('i got hit -----------');
     // they are going to give us url and token
 
     const { userId, urlToken } = req.body;
