@@ -65,7 +65,7 @@ const betRequest = async (transactionId, player, amount, gameDataResult, activeC
 
     // now save the data to bet model and then master collection
 
-    const betInstance = await Bet(process.env.DbName + `-${player?.consumerId}`);
+    const betInstance = await Bet(process.env.DB_NAME + `-${player?.consumerId}`);
     const newBet = new betInstance(bet);
     await newBet.save();
     await masterController.saveToMaster(player._id, 'BET', bet, res, player, player?.consumerId);
@@ -134,7 +134,7 @@ const cancelRequest = async (player, bet) => {
     refund.txDetails = res.txDetails;
     dbLog(`SET, req: Cancel, playerId: ${player._id}, data: ${JSON.stringify(refund)}`);
 
-    const refundInstance = await Refund(process.env.DbName + `-${player?.consumerId}`);
+    const refundInstance = await Refund(process.env.DB_NAME + `-${player?.consumerId}`);
     const newRefund = new refundInstance(refund);
     await newRefund.save();
 

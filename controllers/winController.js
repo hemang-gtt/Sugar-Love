@@ -52,7 +52,7 @@ const winRequest = async (transactionId, player, amount, gameId, gamePlay, betAm
     win.txDetails = res.txDetails;
 
     logger.info(`Win data saved in model--------${JSON.stringify(win)}`);
-    const winInstance = await Win(process.env.DbName + `-${player?.consumerId}`);
+    const winInstance = await Win(process.env.DB_NAME + `-${player?.consumerId}`);
     const newWin = new winInstance(win);
     await newWin.save();
     await masterController.saveToMaster(player._id, 'WIN', win, res, player, player?.consumerId);

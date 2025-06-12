@@ -393,9 +393,9 @@ const userBet = async (
       });
 
       // now update the player model
-      const playerInstance = await Player(process.env.DbName + `-${user.consumerId}`);
+      const playerInstance = await Player(process.env.DB_NAME + `-${user.consumerId}`);
 
-      const campaignInstance = await Campaign(process.env.DbName + `-${user.consumerId}`);
+      const campaignInstance = await Campaign(process.env.DB_NAME + `-${user.consumerId}`);
 
       const updatedPlayer = await playerInstance
         .findOneAndUpdate({ _id: userId }, { $set: userUpdate }, { upsert: true, new: true })
@@ -453,7 +453,7 @@ const userBet = async (
       logger.info(`Balance now is ------------${gameResult.res.b}`);
     }
 
-    const playerInstance = await Player(process.env.DbName + `-${user.consumerId}`);
+    const playerInstance = await Player(process.env.DB_NAME + `-${user.consumerId}`);
     await playerInstance.findOneAndUpdate({ _id: userId }, { $set: userUpdate }, { upsert: true, new: true }).lean();
 
     walletBalance = win && win.status === 'SUCCESS' ? win.balance : user.balance;

@@ -47,13 +47,14 @@ const runCronJob = async () => {
   } catch (error) {
     // if there any error come in this case then we need to remove few keys from redis , set isCronRunning as false
 
-    const currentLockValue = await redis.get(lockKey);
-    if (currentLockValue === lockValue) {
-      await redis.del(lockKey);
+    // ! will never come here ---------
+    // const currentLockValue = await redis.get(lockKey);
+    // if (currentLockValue === lockValue) {
+    //   await redis.del(lockKey);
 
-      logger.info(`Deleted the key ----------------${lockKey}`);
-    }
-    await redis.set(`${redisDb}:isCronRunning`, false);
+    //   logger.info(`Deleted the key ----------------${lockKey}`);
+    // }
+    // await redis.set(`${redisDb}:isCronRunning`, false);
     logger.info(`Error in cron job------------- `);
   }
 };

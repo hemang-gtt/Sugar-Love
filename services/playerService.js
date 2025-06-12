@@ -12,7 +12,7 @@ const gameLaunch = async (payload, playerInfo) => {
   logger.info(`INSIDE GAME LAUNCH::::::::::::::::::::::`);
   logger.info(`payload came is ----------${JSON.stringify(payload)}`);
 
-  const playerInstance = await Player(process.env.DbName + `-${payload?.consumerId}`);
+  const playerInstance = await Player(process.env.DB_NAME + `-${payload?.consumerId}`);
 
   const player = await playerInstance
     .findOne({

@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const { manualExpressJson, manualUrlEncoded } = require('./express-middleware');
 const { healthCheck } = require('./controllers/healthController');
 const { gameLauncher } = require('./controllers/gameController');
@@ -21,13 +22,26 @@ app.use((req, res, next) => {
   next();
 });
 
+const whitelist = ['https://gametimetec.com', 'https://games.gttcasino.com', 'https://gttcasino.com'];
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (whitelist.indexOf(origin) !== -1 || !origin) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+};
+
 app.use(manualExpressJson);
 app.use(manualUrlEncoded);
+
+app.use(cors(corsOptions));
 
 startCron(true);
 
 app.get(`${base_path}/health`, healthCheck);
-app.post(`${base_path}/game/launch`, gameLauncher);
+app.get(`${base_path}/games/launch`, gameLauncher); // changing it to get requirment
 app.post(`${base_path}/login`, loginHandler);
 
 app.post(`${base_path}/bet`, gameBet);

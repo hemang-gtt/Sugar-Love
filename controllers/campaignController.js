@@ -10,7 +10,7 @@ const createMasterCampaign = async (req, res) => {
   try {
     logger.info(`Creating master campaign ----------------`);
     const consumerId = req.headers['x-hub-consumer'];
-    const campaignMasterInstance = await CampaignMaster(process.env.DbName + `-${consumerId}`);
+    const campaignMasterInstance = await CampaignMaster(process.env.DB_NAME + `-${consumerId}`);
 
     if (!consumerId) {
       return res.status(404).json({
@@ -58,9 +58,9 @@ const createCampaign = async (req, res) => {
         message: 'Something went wrong',
       });
     }
-    const campaignInstance = await Campaign(process.env.DbName + `-${consumerId}`);
-    const campaignMasterInstance = await CampaignMaster(process.env.DbName + `-${consumerId}`);
-    const playerInstance = await Player(process.env.DbName + `-${consumerId}`);
+    const campaignInstance = await Campaign(process.env.DB_NAME + `-${consumerId}`);
+    const campaignMasterInstance = await CampaignMaster(process.env.DB_NAME + `-${consumerId}`);
+    const playerInstance = await Player(process.env.DB_NAME + `-${consumerId}`);
 
     const data = req.body;
     let { error, value } = campaignValidator.validate(data);
@@ -190,8 +190,8 @@ const cancelCampaign = async (req, res) => {
         message: 'Something went wrong',
       });
     }
-    const campaignInstance = await Campaign(process.env.DbName + `-${consumerId}`);
-    const playerInstance = await Player(process.env.DbName + `-${consumerId}`);
+    const campaignInstance = await Campaign(process.env.DB_NAME + `-${consumerId}`);
+    const playerInstance = await Player(process.env.DB_NAME + `-${consumerId}`);
     const existingCampaign = await campaignInstance.findOne({
       campaignId: data.campaignId,
     });

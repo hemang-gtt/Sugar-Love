@@ -1,5 +1,4 @@
 const http = require('http');
-const cors = require('cors');
 
 global.logger = require('./utils/logger');
 
@@ -10,6 +9,7 @@ const app = require('./app');
 
 let server;
 if (process.env.NODE_ENV === 'production') {
+  // ! NO more needed this code
   app.use(cors(corsOptions));
   // SERVER OPTIONS
   const options = {
@@ -18,12 +18,11 @@ if (process.env.NODE_ENV === 'production') {
   };
   server = http.createServer(options, app);
 } else {
-  app.use(cors());
   server = http.createServer(app);
 }
 
 const port = process.env.PORT;
-const DbName = process.env.DbName;
+const DbName = process.env.DB_NAME;
 
 getDatabaseConnection(DbName);
 

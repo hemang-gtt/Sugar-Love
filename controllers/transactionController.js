@@ -98,13 +98,13 @@ const saveWalletTransaction = async (
         }
 
         // now save the win amount in db ----
-        const playerInstance = await Player(process.env.DbName + `-${user.consumerId}`);
+        const playerInstance = await Player(process.env.DB_NAME + `-${user.consumerId}`);
 
         const savePlayer = await playerInstance
           .findOneAndUpdate({ _id: user._id }, { $set: userUpdate }, { new: true })
           .lean();
 
-        const transactionInstance = await Transaction(process.env.DbName + `-${user.consumerId}`);
+        const transactionInstance = await Transaction(process.env.DB_NAME + `-${user.consumerId}`);
 
         let transactionData = {
           userId: id,

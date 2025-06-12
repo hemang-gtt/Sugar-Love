@@ -26,7 +26,7 @@ const gameLauncher = async (req, res, next) => {
 
     logger.info(`Player data recieved --------${JSON.stringify(playerInfo)}`);
 
-    let response = await gameLaunch(req.query, playerInfo);
+    let response = await gameLaunch(value, playerInfo); // pass the joi validated value here
     logger.info(`response is ----------${JSON.stringify(response)}`);
 
     // store this data in redis
@@ -48,7 +48,8 @@ const gameLauncher = async (req, res, next) => {
     await redis.set(`${redisDb}-user:${userId}`, token, 'EX', 3600); // 1hr window size
 
     apiLog(`url generated from the  Game launch Api${response}`);
-    return res.status(200).json({ response });
+
+    return res.redirect(response.url);
   } catch (error) {
     const axiosError = error?.response ? error : error?.error; // handles nested errors
     const errorData = axiosError?.response?.data;
@@ -75,7 +76,7 @@ const saveGamePlay = async (userId, betAmount, slotResult, user, isFeatureBuy, m
   }
   */
   if (userId && user.currency) {
-    const gameInstace = await gameModel(process.env.DbName + `-${user?.consumerId}`);
+    const gameInstace = await gameModel(process.env.DB_NAME + `-${user?.consumerId}`);
 
     let gamePlayData = {
       userId,

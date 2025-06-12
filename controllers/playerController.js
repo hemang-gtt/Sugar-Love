@@ -17,8 +17,8 @@ const logger = require('../utils/logger');
 
 const authorizePlayer = async (userId, urlToken, consumerId) => {
   logger.info(`Authorizing the player ----------------`);
-  const playerInstance = await Player(process.env.DbName + `-${consumerId}`);
-  const campaignMasterInstance = await CampaignMaster(process.env.DbName + `-${consumerId}`);
+  const playerInstance = await Player(process.env.DB_NAME + `-${consumerId}`);
+  const campaignMasterInstance = await CampaignMaster(process.env.DB_NAME + `-${consumerId}`);
 
   let playerData = await playerInstance.findOne({ _id: userId }).lean();
 
@@ -230,7 +230,7 @@ const loginHandler = async (req, res, next) => {
 };
 
 const verifyPlayer = async (userId, betAmount, isFeatureBuy, consumerId) => {
-  const playerInstance = await Player(process.env.DbName + `-${consumerId}`);
+  const playerInstance = await Player(process.env.DB_NAME + `-${consumerId}`);
   let playerData = await playerInstance.findOne({ _id: userId }).lean();
   if (!playerData) {
     return {

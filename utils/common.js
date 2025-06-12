@@ -58,7 +58,7 @@ const isValidCurrencyProxy = async (currency) => {
   try {
     // "en"
     let finalURL = process.env.CURRENCY_URL + `/is-valid-currency/${currency}`;
-    const headers = { info: process.env.DbName };
+    const headers = { info: process.env.DB_NAME };
     let response = await axios.get(finalURL, { headers, timeout: 10000 });
     return { status: 'SUCCESS', ...response.data };
   } catch (error) {
@@ -78,7 +78,7 @@ const currencyAPIProxy = async (currency, min, max, step = null, isStepArray = f
     if (step != null) finalURL += `/${step}`;
     if (isStepArray) finalURL += `/${isStepArray}`;
 
-    const headers = { info: process.env.DbName };
+    const headers = { info: process.env.DB_NAME };
     let resp = await axios.get(finalURL, { headers, timeout: 10000 });
     return { status: 1, ...resp.data };
   } catch (error) {

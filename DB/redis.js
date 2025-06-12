@@ -22,7 +22,7 @@ redisClient.on('error', (err) => {
   logger.info('error while connecting redis');
 });
 
-const redisDb = process.env.DbName;
+const redisDb = process.env.DB_NAME;
 
 logger.info(`Connected to redis on the port ${process.env.REDIS_PORT} and database name is ${redisDb}`);
 

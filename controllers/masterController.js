@@ -4,7 +4,7 @@ const logger = require('../utils/logger');
 
 const saveToMaster = async (playerId, requestType, req, res, user, providerName) => {
   logger.info(`Inside the master controller --------`);
-  const masterInstance = await masterModel(process.env.DbName + `-${req?.consumerId || providerName}`);
+  const masterInstance = await masterModel(process.env.DB_NAME + `-${req?.consumerId || providerName}`);
   const masterData = {
     playerId: playerId,
     type: requestType,

@@ -10,7 +10,7 @@ const { logErrorMessage } = require('../logs');
 const resolvePending = async () => {
   try {
     logger.info(`Resolving the pending task-----------------`);
-    let pendingInstance = await Pending(process.env.DbName);
+    let pendingInstance = await Pending(process.env.DB_NAME);
 
     let data = await pendingInstance.find();
 
@@ -32,9 +32,9 @@ const resolvePending = async () => {
           apiResolvedTimeStamp: Math.floor(new Date().getTime() / 1000),
         };
 
-        const transactionInstance = await Transaction(process.env.DbName + `-${providerName}`);
+        const transactionInstance = await Transaction(process.env.DB_NAME + `-${providerName}`);
 
-        const pendingInstance = await Pending(process.env.DbName);
+        const pendingInstance = await Pending(process.env.DB_NAME);
 
         const updatedTransaction = await transactionInstance.findOneAndUpdate(
           { userId: req.userId, transactionId: req.transactionId },
@@ -65,7 +65,7 @@ const pendingWinRequest = async (win, requestType, maxRetries, alreadyInPending,
   win.txDetails = winDetails.data.txDetails;
 
   logger.info('data going to save in the win is ---------', win);
-  const winInstance = await Win(process.env.DbName + `-${providerName}`);
+  const winInstance = await Win(process.env.DB_NAME + `-${providerName}`);
   const newWin = new winInstance(win);
   await newWin.save();
   await saveToMaster(win.playerId, 'WIN', win, winDetails.data, null, providerName);
@@ -88,7 +88,7 @@ const pendingCancelRequest = async (refund, requestType, maxRetries, alreadyInPe
 
   logger.info(`Refund object is --------${refund}---------and provider name is ----${providerName}`);
 
-  const refundInstance = await Refund(process.env.DbName + `-${providerName}`);
+  const refundInstance = await Refund(process.env.DB_NAME + `-${providerName}`);
   const newRefund = new refundInstance(refund);
   await newRefund.save();
   await saveToMaster(refund.playerId, 'REFUND', refund, res.data, null, providerName);
@@ -134,7 +134,7 @@ const pendingPostReq = async (
 const saveToPending = async (data, requestType, playerId) => {
   try {
     logger.info(`Saving to pending scehma-----------------`);
-    const pendingInstance = await Pending(process.env.DbName);
+    const pendingInstance = await Pending(process.env.DB_NAME);
     const pendingObject = {
       userId: playerId,
       type: requestType,

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const { LRUCache } = require('lru-cache');
 const logger = require('../utils/logger');
-const LINK = process.env.MONGO_URI;
+const LINK = process.env.DB_URL;
 
 const connectionCache = new LRUCache({
   max: 40,
